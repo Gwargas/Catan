@@ -6,7 +6,7 @@ import sys
 pygame.init()
 LARGURA, ALTURA = 800, 600
 TELA = pygame.display.set_mode((LARGURA, ALTURA))
-pygame.display.set_caption("Catan Solo - Construção e Recursos")
+pygame.display.set_caption("CATAN")
 FONTE_NUMEROS = pygame.font.SysFont("Arial", 24, bold=True)
 FONTE_TEXTO = pygame.font.SysFont("Arial", 22)
 FONTE_TITULO = pygame.font.SysFont("Arial", 26, bold=True)
@@ -24,10 +24,10 @@ MONTANHA = (112, 128, 144)
 DESERTO = (244, 164, 96)  
 
 MAPA_RECURSOS = {
-    FLORESTA: 'Madeira',
+    FLORESTA: 'Madeira', #Catnip?
     COLINA: 'Tijolo',
-    PASTO: 'Ovelha',
-    PLANTACAO: 'Trigo',
+    PASTO: 'Ovelha', #Novelo de lã?
+    PLANTACAO: 'Trigo', #Ração? Peixe?
     MONTANHA: 'Minério'
 }
 
@@ -39,6 +39,7 @@ FICHAS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12]
 random.shuffle(FICHAS)
 
 aldeias_construidas = []
+estradas_construidas = []
 inventario = {
     'Madeira': 0,
     'Tijolo': 0,
@@ -46,6 +47,16 @@ inventario = {
     'Trigo': 0,
     'Minério': 0
 }
+
+class vertice:
+    def __init__(self, pos):
+        self.pos = pos
+        self.x = pos[0]
+        self.y = pos[1]
+        self.vizinhos = []
+
+    def add_vizinho(self, v):
+        self.vizinhos.append(v)
 
 def calcular_pontos_hexagono(centro_x, centro_y, tamanho):
     pontos = []
@@ -87,12 +98,16 @@ def gerar_tabuleiro():
             
             for px, py in pontos:
                 existe = False
-                for vx, vy in vertices_globais:
-                    if math.hypot(px - vx, py - vy) < 5:
+                for v in vertices_globais:
+                    if math.hypot(px - v.x, py - v.y) < 5:
                         existe = True
                         break
                 if not existe:
-                    vertices_globais.append((px, py))
+                    vertices_globais.append(vertice([px, py]))
+            for vert in vertices_globais:
+                for viz in vertices_globais:
+                    if math.dist(vert.pos, viz.pos) <= TAMANHO_HEX * 1.1 and vert != viz:
+                        vert.add_vizinho(viz)
                 
             tabuleiro.append({
                 'centro': (cx, cy),
@@ -120,19 +135,36 @@ def desenhar_tabuleiro(tela, tabuleiro, ultimo_dado):
             retangulo_texto = texto.get_rect(center=peca['centro'])
             tela.blit(texto, retangulo_texto)
 
-def desenhar_vertices_e_aldeias(tela, vertices_globais):
-    for vx, vy in vertices_globais:
-        pygame.draw.circle(tela, BRANCO, (vx, vy), 4)
-        
-    for ax, ay in aldeias_construidas:
+def desenhar_vertices_e_aldeias(tela, vertices_globais, vertice_selecionado):
+    for v in vertices_globais:
+        pygame.draw.circle(tela, BRANCO, (v.x, v.y), 4)
+
+    for e in estradas_construidas:
+        pygame.draw.line(tela, PRETO, e[0].pos, e[1].pos, width=8)
+        pygame.draw.line(tela, AZUL_JOGADOR, e[0].pos, e[1].pos, width=6)
+
+    for v in aldeias_construidas:
         retangulo = pygame.Rect(0, 0, 16, 16)
-        retangulo.center = (ax, ay)
+        retangulo.center = (v.x, v.y)
         pygame.draw.rect(tela, AZUL_JOGADOR, retangulo)
         pygame.draw.rect(tela, PRETO, retangulo, 2)
+        
+
+    if vertice_selecionado != None:
+        for v in vertice_selecionado.vizinhos:
+            pygame.draw.line(tela, PRETO, vertice_selecionado.pos, v.pos, width=8)
+            pygame.draw.line(tela, BRANCO, vertice_selecionado.pos, v.pos, width=6)
+
+        pygame.draw.circle(tela, BRANCO, vertice_selecionado.pos, 10)
+        pygame.draw.circle(tela, PRETO, vertice_selecionado.pos, 10, width=1)
+
+    
+
+
 
 def desenhar_interface(tela, ultimo_dado):
-    instrucao = FONTE_TEXTO.render("Clique nas pontas para construir aldeias. ESPAÇO para rolar dados.", True, PRETO)
-    tela.blit(instrucao, (20, 20))
+    #instrucao = FONTE_TEXTO.render("Clique nas pontas para construir aldeias. ESPAÇO para rolar dados.", True, PRETO)
+    #tela.blit(instrucao, (20, 20))
     
     if ultimo_dado > 0:
         msg_dado = FONTE_TITULO.render(f"Dado rolado: {ultimo_dado}", True, PRETO)
@@ -145,18 +177,23 @@ def desenhar_interface(tela, ultimo_dado):
         tela.blit(texto_rec, (LARGURA - 150, y_inv))
         y_inv += 30
 
-def tentar_construir_aldeia(pos_mouse, vertices_globais):
+def selecionar_ponto(pos_mouse, vertices_globais):
     mx, my = pos_mouse
-    for vx, vy in vertices_globais:
-        if math.hypot(vx - mx, vy - my) < 15:
-            ja_existe = False
-            for ax, ay in aldeias_construidas:
-                if math.hypot(vx - ax, vy - ay) < 5:
-                    ja_existe = True
-            
-            if not ja_existe:
-                aldeias_construidas.append((vx, vy))
-                return True
+    for v in vertices_globais:
+        if math.hypot(v.x - mx, v.y - my) < 15:
+            return v
+    return None
+
+def tentar_construir_aldeia(pos, vertices_globais):
+    if pos not in aldeias_construidas:
+        aldeias_construidas.append(pos)
+        return True
+    return False
+
+def tentar_construir_estrada(pos1, pos2):
+    if [pos1, pos2] not in aldeias_construidas:
+        estradas_construidas.append([pos1, pos2])
+        return True
     return False
 
 def distribuir_recursos(tabuleiro, dado):
@@ -172,6 +209,7 @@ def main():
     relogio = pygame.time.Clock()
     tabuleiro, vertices_globais = gerar_tabuleiro()
     ultimo_dado = 0
+    vertice_selecionado = None
     
     rodando = True
     while rodando:
@@ -183,7 +221,22 @@ def main():
                 
             elif evento.type == pygame.MOUSEBUTTONDOWN:
                 if evento.button == 1:
-                    tentar_construir_aldeia(evento.pos, vertices_globais)
+                    if vertice_selecionado == None:
+                        vertice_selecionado = selecionar_ponto(evento.pos, vertices_globais)
+                    else:
+                        if math.dist(evento.pos, vertice_selecionado.pos) < 10:
+                            tentar_construir_aldeia(vertice_selecionado, vertices_globais)
+                            vertice_selecionado = None
+
+                        else:
+                            for v in vertice_selecionado.vizinhos:
+                                dist = abs((vertice_selecionado.y - v.y)*evento.pos[0] - (vertice_selecionado.x - v.x)*evento.pos[1] + vertice_selecionado.x * v.y 
+                                           - vertice_selecionado.y * v.x)/math.dist(v.pos, vertice_selecionado.pos)
+                                if dist <= 5:
+                                    tentar_construir_estrada(vertice_selecionado, v)
+
+                            vertice_selecionado = selecionar_ponto(evento.pos, vertices_globais)
+
                     
             elif evento.type == pygame.KEYDOWN:
                 if evento.key == pygame.K_SPACE:
@@ -191,7 +244,7 @@ def main():
                     distribuir_recursos(tabuleiro, ultimo_dado)
         
         desenhar_tabuleiro(TELA, tabuleiro, ultimo_dado)
-        desenhar_vertices_e_aldeias(TELA, vertices_globais)
+        desenhar_vertices_e_aldeias(TELA, vertices_globais, vertice_selecionado)
         desenhar_interface(TELA, ultimo_dado)
         
         pygame.display.flip()
