@@ -200,9 +200,9 @@ def distribuir_recursos(tabuleiro, dado):
     for peca in tabuleiro:
         if peca['numero'] == dado and peca['cor'] != DESERTO:
             recurso = MAPA_RECURSOS[peca['cor']]
-            for vx, vy in peca['vertices']:
-                for ax, ay in aldeias_construidas:
-                    if math.hypot(vx - ax, vy - ay) < 5:
+            for v in peca['vertices']:
+                for a in aldeias_construidas:
+                    if math.hypot(v[0] - a.x, v[1] - a.y) < 5:
                         inventario[recurso] += 1
 
 def main():
