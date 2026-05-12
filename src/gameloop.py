@@ -210,7 +210,7 @@ def main():
     tabuleiro, vertices_globais = gerar_tabuleiro()
     ultimo_dado = 0
     vertice_selecionado = None
-    
+    voltar_para_menu = True
     rodando = True
     while rodando:
         TELA.fill(COR_FUNDO)
@@ -218,7 +218,8 @@ def main():
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
                 rodando = False
-                
+                voltar_para_menu = False
+
             elif evento.type == pygame.MOUSEBUTTONDOWN:
                 if evento.button == 1:
                     if vertice_selecionado == None:
@@ -242,7 +243,11 @@ def main():
                 if evento.key == pygame.K_SPACE:
                     ultimo_dado = random.randint(1, 6) + random.randint(1, 6)
                     distribuir_recursos(tabuleiro, ultimo_dado)
-        
+
+                elif evento.key == pygame.K_ESCAPE:
+                    rodando = False
+                    voltar_para_menu = True
+
         desenhar_tabuleiro(TELA, tabuleiro, ultimo_dado)
         desenhar_vertices_e_aldeias(TELA, vertices_globais, vertice_selecionado)
         desenhar_interface(TELA, ultimo_dado)
@@ -250,8 +255,7 @@ def main():
         pygame.display.flip()
         relogio.tick(60)
 
-    pygame.quit()
-    sys.exit()
+    return voltar_para_menu
 
 if __name__ == "__main__":
     main()

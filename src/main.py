@@ -45,7 +45,14 @@ class Game():
             self.check_events()
             if self.START_KEY:
                 self.playing = False
-            gameloop.main()
+
+            voltar_menu = gameloop.main()
+            self.playing = False
+
+            if not voltar_menu:
+                self.running = False
+            
+            self.window.fill(self.BLACK)
             self.window.blit(self.display,(0,0))
             pygame.display.update()
             self.reset_keys()
