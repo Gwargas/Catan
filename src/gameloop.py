@@ -193,10 +193,27 @@ def desenhar_vertices_e_aldeias(tela, vertices_globais, vertice_selecionado, jog
         v = aldeia["vertice"]
         cor_jogador = jogadores[aldeia["jogador"]]["cor"]
 
-        retangulo = pygame.Rect(0, 0, 16, 16)
-        retangulo.center = (v.x, v.y)
-        pygame.draw.rect(tela, cor_jogador, retangulo)
-        pygame.draw.rect(tela, PRETO, retangulo, 2)
+        if aldeia["tipo"] == "cidade":
+            retangulo = pygame.Rect(0, 0, 22, 18)
+            retangulo.center = (v.x, v.y + 3)
+
+            telhado = [
+                (v.x - 13, v.y - 4),
+                (v.x, v.y - 17),
+                (v.x + 13, v.y - 4)
+            ]
+
+            pygame.draw.rect(tela, cor_jogador, retangulo)
+            pygame.draw.polygon(tela, cor_jogador, telhado)
+
+            pygame.draw.rect(tela, PRETO, retangulo, 2)
+            pygame.draw.polygon(tela, PRETO, telhado, 2)
+
+        else:
+            retangulo = pygame.Rect(0, 0, 16, 16)
+            retangulo.center = (v.x, v.y)
+            pygame.draw.rect(tela, cor_jogador, retangulo)
+            pygame.draw.rect(tela, PRETO, retangulo, 2)
         
 
     if vertice_selecionado != None:
@@ -290,7 +307,8 @@ def tentar_construir_aldeia(pos, vertices_globais, jogador_atual, jogadores):
 
     aldeias_construidas.append({
         "vertice": pos,
-        "jogador": jogador_atual
+        "jogador": jogador_atual,
+        "tipo": "aldeia"
     })
 
     jogador["pontos"] += 1
@@ -346,6 +364,29 @@ def tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores):
     print(f"{jogador['nome']} construiu uma estrada.")
     return True
 
+def tentar_construir_cidade(pos, jogador_atual, jogadores):
+    jogador = jogadores[jogador_atual]
+
+    for construcao in aldeias_construidas:
+        if construcao["vertice"] == pos and construcao["jogador"] == jogador_atual:
+            if construcao["tipo"] == "cidade":
+                print("Este local já é uma cidade.")
+                return False
+
+            if not tem_recursos(jogador, CUSTO_CIDADE):
+                print("Recursos insuficientes para construir cidade.")
+                return False
+
+            gastar_recursos(jogador, CUSTO_CIDADE)
+            construcao["tipo"] = "cidade"
+            jogador["pontos"] += 1
+
+            print(f"{jogador['nome']} construiu uma cidade.")
+            return True
+
+    print("Você só pode construir cidade em uma aldeia sua.")
+    return False
+
 def distribuir_recursos(tabuleiro, dado, jogadores):
     for peca in tabuleiro:
         if peca['numero'] == dado and peca['cor'] != DESERTO:
@@ -357,7 +398,13 @@ def distribuir_recursos(tabuleiro, dado, jogadores):
                     dono = aldeia["jogador"]
 
                     if math.hypot(v[0] - vertice_aldeia.x, v[1] - vertice_aldeia.y) < 5:
-                        jogadores[dono]["inventario"][recurso] += 1
+                        if aldeia["tipo"] == "cidade":
+                            quantidade = 2
+                        else:
+                            quantidade = 1
+
+                        jogadores[dono]["inventario"][recurso] += quantidade
+                        print(f"{jogadores[dono]['nome']} recebeu {quantidade} {recurso}")
 
 def passar_turno(jogador_atual, jogadores):
     jogador_atual = (jogador_atual + 1) % len(jogadores)
@@ -387,6 +434,11 @@ CUSTO_ESTRADA = {
     "Tijolo": 1
 }
 
+CUSTO_CIDADE = {
+    "Trigo": 2,
+    "Minério": 3
+}
+
 PONTOS_PARA_VENCER = 10
 
 def verificar_vencedor(jogadores):
@@ -413,6 +465,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
     while rodando:
         TELA.fill(COR_FUNDO)
 
+        vencedor = verificar_vencedor(jogadores)
         jogador = jogadores[jogador_atual]
 
         if jogador["tipo"] == "bot":
@@ -434,7 +487,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
             if evento.type == pygame.QUIT:
                 rodando = False
 
-            if vencedor is not None:
+            elif vencedor is not None:
                 continue
                 
             elif evento.type == pygame.MOUSEBUTTONDOWN:
@@ -488,6 +541,13 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                     jogadores[jogador_atual]["inventario"]["Trigo"] += 1
                     jogadores[jogador_atual]["inventario"]["Minério"] += 1
                     print(f"Recursos adicionados para {jogadores[jogador_atual]['nome']}")
+                
+                elif evento.key == pygame.K_c:
+                    if vertice_selecionado is not None:
+                        tentar_construir_cidade(vertice_selecionado, jogador_atual, jogadores)
+                        vertice_selecionado = None
+                    else:
+                        print("Selecione uma aldeia sua antes de apertar C.")
 
         desenhar_tabuleiro(TELA, tabuleiro, ultimo_dado)
         desenhar_vertices_e_aldeias(TELA, vertices_globais, vertice_selecionado, jogadores)
