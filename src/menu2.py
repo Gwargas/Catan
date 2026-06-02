@@ -82,12 +82,14 @@ class Menu():
 class MainMenu(Menu):
     def __init__(self, game):
         Menu.__init__(self,game)
-        self.state = "Start"
-        self.startx, self.starty = self.mid_w, self.mid_h + 30
-        self.optionsx, self.optionsy = self.mid_w, self.mid_h + 90 
-        self.creditsx, self.creditsy = self.mid_w, self.mid_h + 150
-        self.cursor_rect.midtop = (self.startx + self.offset, self.starty)
+        self.state = "Multiplayer"
 
+        self.multiplayerx, self.multiplayery = self.mid_w, self.mid_h + 30
+        self.botx, self.boty = self.mid_w, self.mid_h + 90
+        self.optionsx, self.optionsy = self.mid_w, self.mid_h + 150
+        self.creditsx, self.creditsy = self.mid_w, self.mid_h + 210
+        self.cursor_rect.midtop = (self.multiplayerx + self.offset, self.multiplayery)
+        
         btn_w, btn_h = 150, 55
 
         self.title_image = pygame.image.load("assets/Menu-principal.png").convert_alpha()
@@ -96,7 +98,7 @@ class MainMenu(Menu):
 
         self.start_img = pygame.image.load("assets/Iniciar-jogo.png").convert_alpha()
         self.start_img = pygame.transform.smoothscale(self.start_img, (btn_w, btn_h))
-        self.start_img_rect = self.start_img.get_rect(center=(self.startx, self.starty))
+        self.start_img_rect = self.start_img.get_rect(center=(self.multiplayerx, self.multiplayery))
 
         self.options_img = pygame.image.load("assets/configurações.png").convert_alpha()
         self.options_img = pygame.transform.smoothscale(self.options_img, (btn_w, btn_h))
@@ -116,6 +118,7 @@ class MainMenu(Menu):
             self.game.display.blit(self.title_image, self.title_rect)
             
             self.game.display.blit(self.start_img, self.start_img_rect)
+            self.game.draw_text("Contra Máquina", 24, self.botx, self.boty)
             self.game.display.blit(self.options_img, self.options_img_rect)
             self.game.display.blit(self.credits_img, self.credits_img_rect)
             
@@ -129,23 +132,30 @@ class MainMenu(Menu):
     def move_cursor(self):
         if self.game.DOWN_KEY:
             self.game.play_cursor_sound()
-            if self.state == 'Start':
+            if self.state == 'Multiplayer':
+                self.cursor_rect.midtop = (self.botx + self.offset, self.boty)
+                self.state = 'Bot'
+            elif self.state == 'Bot':
                 self.cursor_rect.midtop = (self.optionsx + self.offset, self.optionsy)
                 self.state = 'Options'
             elif self.state == 'Options':
                 self.cursor_rect.midtop = (self.creditsx + self.offset, self.creditsy)
                 self.state = 'Credits'
             elif self.state == 'Credits':
-                self.cursor_rect.midtop = (self.startx + self.offset, self.starty)
-                self.state = 'Start'
+                self.cursor_rect.midtop = (self.multiplayerx + self.offset, self.multiplayery)
+                self.state = 'Multiplayer'
+
         elif self.game.UP_KEY:
             self.game.play_cursor_sound()
-            if self.state == 'Start':
+            if self.state == 'Multiplayer':
                 self.cursor_rect.midtop = (self.creditsx + self.offset, self.creditsy)
                 self.state = 'Credits'
+            elif self.state == 'Bot':
+                self.cursor_rect.midtop = (self.multiplayerx + self.offset, self.multiplayery)
+                self.state = 'Multiplayer'
             elif self.state == 'Options':
-                self.cursor_rect.midtop = (self.startx + self.offset, self.starty)
-                self.state = 'Start'
+                self.cursor_rect.midtop = (self.botx + self.offset, self.boty)
+                self.state = 'Bot'
             elif self.state == 'Credits':
                 self.cursor_rect.midtop = (self.optionsx + self.offset, self.optionsy)
                 self.state = 'Options'
@@ -154,7 +164,11 @@ class MainMenu(Menu):
         self.move_cursor()
         if self.game.START_KEY:
             self.game.play_confirm_sound()
-            if self.state == 'Start':
+            if self.state == 'Multiplayer':
+                self.game.game_mode = "custom"
+                self.game.curr_menu = self.game.player_count_menu
+            elif self.state == 'Bot':
+                self.game.game_mode = "bot"
                 self.game.playing = True
             elif self.state == 'Options':
                 self.game.curr_menu = self.game.options
@@ -162,7 +176,132 @@ class MainMenu(Menu):
                 self.game.curr_menu = self.game.credits
             self.run_display = False
 
+class PlayerCountMenu(Menu):
+    def __init__(self, game):
+        Menu.__init__(self, game)
+        self.state = "2"
 
+        self.two_x, self.two_y = self.mid_w, self.mid_h + 20
+        self.three_x, self.three_y = self.mid_w, self.mid_h + 60
+        self.four_x, self.four_y = self.mid_w, self.mid_h + 100
+
+        self.cursor_rect.midtop = (self.two_x + self.offset, self.two_y)
+
+    def display_menu(self):
+        self.run_display = True
+
+        while self.run_display:
+            self.game.check_events()
+            self.check_input()
+
+            self.game.display.blit(self.background, (0, 0))
+            self.game.draw_text("Quantidade de participantes", 22, self.mid_w, self.mid_h - 40)
+
+            self.game.draw_text("2 jogadores", 18, self.two_x, self.two_y)
+            self.game.draw_text("3 jogadores", 18, self.three_x, self.three_y)
+            self.game.draw_text("4 jogadores", 18, self.four_x, self.four_y)
+
+            self.draw_bottom_bar()
+            self.update_cat()
+            self.draw_cursor()
+            self.blit_screen()
+
+    def check_input(self):
+        if self.game.BACK_KEY:
+            self.game.play_back_sound()
+            self.game.curr_menu = self.game.main_menu
+            self.run_display = False
+
+        elif self.game.DOWN_KEY:
+            self.game.play_cursor_sound()
+
+            if self.state == "2":
+                self.state = "3"
+                self.cursor_rect.midtop = (self.three_x + self.offset, self.three_y)
+            elif self.state == "3":
+                self.state = "4"
+                self.cursor_rect.midtop = (self.four_x + self.offset, self.four_y)
+            elif self.state == "4":
+                self.state = "2"
+                self.cursor_rect.midtop = (self.two_x + self.offset, self.two_y)
+
+        elif self.game.UP_KEY:
+            self.game.play_cursor_sound()
+
+            if self.state == "2":
+                self.state = "4"
+                self.cursor_rect.midtop = (self.four_x + self.offset, self.four_y)
+            elif self.state == "3":
+                self.state = "2"
+                self.cursor_rect.midtop = (self.two_x + self.offset, self.two_y)
+            elif self.state == "4":
+                self.state = "3"
+                self.cursor_rect.midtop = (self.three_x + self.offset, self.three_y)
+
+        elif self.game.START_KEY:
+            self.game.play_confirm_sound()
+            self.game.num_players = int(self.state)
+            self.game.num_humanos = 1
+            self.game.curr_menu = self.game.human_count_menu
+            self.run_display = False
+
+class HumanCountMenu(Menu):
+    def __init__(self, game):
+        Menu.__init__(self, game)
+        self.state = 1
+        self.option_positions = []
+
+    def display_menu(self):
+        self.run_display = True
+        self.state = 1
+
+        while self.run_display:
+            self.game.check_events()
+            self.check_input()
+
+            self.game.display.blit(self.background, (0, 0))
+            self.game.draw_text("Quantidade de jogadores humanos", 21, self.mid_w, self.mid_h - 60)
+
+            self.option_positions = []
+
+            for i in range(1, self.game.num_players + 1):
+                x = self.mid_w
+                y = self.mid_h - 10 + (i - 1) * 40
+                self.option_positions.append((x, y))
+                self.game.draw_text(f"{i} humano(s)", 18, x, y)
+
+            cursor_x, cursor_y = self.option_positions[self.state - 1]
+            self.cursor_rect.midtop = (cursor_x + self.offset, cursor_y)
+
+            self.draw_bottom_bar()
+            self.update_cat()
+            self.draw_cursor()
+            self.blit_screen()
+
+    def check_input(self):
+        if self.game.BACK_KEY:
+            self.game.play_back_sound()
+            self.game.curr_menu = self.game.player_count_menu
+            self.run_display = False
+
+        elif self.game.DOWN_KEY:
+            self.game.play_cursor_sound()
+            self.state += 1
+            if self.state > self.game.num_players:
+                self.state = 1
+
+        elif self.game.UP_KEY:
+            self.game.play_cursor_sound()
+            self.state -= 1
+            if self.state < 1:
+                self.state = self.game.num_players
+
+        elif self.game.START_KEY:
+            self.game.play_confirm_sound()
+            self.game.num_humanos = self.state
+            self.game.playing = True
+            self.run_display = False
+            
 class OptionsMenu(Menu):
     def __init__(self, game):
         Menu.__init__(self, game)

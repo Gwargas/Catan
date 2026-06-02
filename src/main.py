@@ -21,6 +21,10 @@ class Game():
         self.font_name = pygame.font.get_default_font()
         self.BLACK, self.WHITE = (0,0,0), (255,255,255)
 
+        self.game_mode = "custom"
+        self.num_players = 2
+        self.num_humanos = 2
+
         self.music_volume = 0.5
         self.effects_volume = 0.5
 
@@ -35,6 +39,8 @@ class Game():
         pygame.mixer.music.play(-1)
 
         self.main_menu = MainMenu(self)
+        self.player_count_menu = PlayerCountMenu(self)
+        self.human_count_menu = HumanCountMenu(self)
         self.options = OptionsMenu(self)
         self.volume = VolumeMenu(self)
         self.credits = CreditsMenu(self)
@@ -45,7 +51,7 @@ class Game():
             self.check_events()
             if self.START_KEY:
                 self.playing = False
-            gameloop.main()
+            gameloop.main(self.game_mode, self.num_players, self.num_humanos)
             self.window.blit(self.display,(0,0))
             pygame.display.update()
             self.reset_keys()
