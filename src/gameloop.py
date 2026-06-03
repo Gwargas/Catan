@@ -163,7 +163,7 @@ def gerar_tabuleiro():
             
     return tabuleiro, vertices_globais
 
-def desenhar_tabuleiro(tela, tabuleiro, ultimo_dado):
+def desenhar_tabuleiro(tela, tabuleiro, ultimo_dado, ladrao):
     for peca in tabuleiro:
         pontos = peca['vertices']
         pygame.draw.polygon(tela, peca['cor'], pontos)
@@ -178,6 +178,14 @@ def desenhar_tabuleiro(tela, tabuleiro, ultimo_dado):
             texto = FONTE_NUMEROS.render(str(peca['numero']), True, cor_texto)
             retangulo_texto = texto.get_rect(center=peca['centro'])
             tela.blit(texto, retangulo_texto)
+
+        if peca == ladrao:
+            pygame.draw.circle(
+                tela,
+                PRETO,
+                (int(peca["centro"][0]), int(peca["centro"][1])),
+                10
+            )
 
 def desenhar_vertices_e_aldeias(tela, vertices_globais, vertice_selecionado, jogadores):
     for v in vertices_globais:
@@ -230,7 +238,7 @@ def desenhar_vertices_e_aldeias(tela, vertices_globais, vertice_selecionado, jog
 
 
 
-def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fase_inicial):
+def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fase_inicial, jogadores, mensagem_jogo):
     if fase_inicial:
         texto_fase = FONTE_TEXTO.render("Fase inicial: construa 2 aldeias e 2 estradas", True, PRETO)
         tela.blit(texto_fase, (20, 120))
@@ -258,16 +266,52 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
     texto_pontos = FONTE_TEXTO.render(f"Pontos: {jogador_atual['pontos']}", True, PRETO)
     tela.blit(texto_pontos, (20, 70))
     
+    indice_jogador = jogador_atual["indice"]
+
+    aldeias_restantes = LIMITE_ALDEIAS - contar_aldeias_do_jogador(indice_jogador)
+    cidades_restantes = LIMITE_CIDADES - contar_cidades_do_jogador(indice_jogador)
+    estradas_restantes = LIMITE_ESTRADAS - contar_estradas_do_jogador(indice_jogador)
+
+    texto_pecas = FONTE_TEXTO.render(
+        f"Peças: {aldeias_restantes} aldeias, {cidades_restantes} cidades, {estradas_restantes} estradas",
+        True,
+        PRETO
+    )
+    tela.blit(texto_pecas, (20, 95))
+
     if ultimo_dado > 0:
         msg_dado = FONTE_TITULO.render(f"Dado rolado: {ultimo_dado}", True, PRETO)
-        tela.blit(msg_dado, (20, 95))
-        
+        tela.blit(msg_dado, (20, 170))
+
+    if mensagem_jogo != "":
+        texto_mensagem = FONTE_TITULO.render(mensagem_jogo, True, PRETO)
+        tela.blit(texto_mensagem, (20, ALTURA - 60))
+    
+    tela.blit(FONTE_TITULO.render("Pontuação:", True, PRETO), (LARGURA - 150, 210))
+
+    y_pontos = 250
+    for jogador in jogadores:
+        texto_ponto = FONTE_TEXTO.render(
+            f"{jogador['nome']}: {jogador['pontos']}",
+            True,
+            PRETO
+        )
+        tela.blit(texto_ponto, (LARGURA - 150, y_pontos))
+        y_pontos += 25
+
     tela.blit(FONTE_TITULO.render("Inventário:", True, PRETO), (LARGURA - 150, 20))
     y_inv = 60
     for recurso, quantidade in jogador_atual["inventario"].items():
         texto_rec = FONTE_TEXTO.render(f"{recurso}: {quantidade}", True, PRETO)
         tela.blit(texto_rec, (LARGURA - 150, y_inv))
         y_inv += 30
+    
+    texto_controles = FONTE_TEXTO.render(
+        "ESPACO: rolar dado | ENTER: passar turno | C: construir cidade",
+        True,
+        PRETO
+    )
+    tela.blit(texto_controles, (20, ALTURA - 30))
 
     if vencedor is not None:
         texto_vitoria = FONTE_TITULO.render(
@@ -408,6 +452,13 @@ def tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores, fase_inicial=
     jogador = jogadores[jogador_atual]
 
     if fase_inicial:
+        aldeias_do_jogador = contar_construcoes_tipo_do_jogador(jogador_atual, "aldeia")
+        estradas_do_jogador = contar_estradas_iniciais_do_jogador(jogador_atual)
+
+        if aldeias_do_jogador <= estradas_do_jogador:
+            print("Construa a aldeia desta rodada antes da estrada.")
+            return False
+
         ultima_aldeia = jogador["ultima_aldeia_inicial"]
 
         if ultima_aldeia is None:
@@ -490,8 +541,11 @@ def tentar_construir_cidade(pos, jogador_atual, jogadores):
     print("Você só pode construir cidade em uma aldeia sua.")
     return False
 
-def distribuir_recursos(tabuleiro, dado, jogadores):
+def distribuir_recursos(tabuleiro, dado, jogadores, ladrao):
     for peca in tabuleiro:
+        if peca == ladrao:
+            continue
+
         if peca['numero'] == dado and peca['cor'] != DESERTO:
             recurso = MAPA_RECURSOS[peca['cor']]
 
@@ -679,10 +733,79 @@ def jogador_completou_rodada_inicial(jogador_atual, indice_fase_inicial, jogador
 
     return aldeias >= limite_inicial and estradas >= limite_inicial
 
+def limpar_dados_fase_inicial(jogadores):
+    for jogador in jogadores:
+        jogador["ultima_aldeia_inicial"] = None
+
+def encontrar_deserto(tabuleiro):
+    for peca in tabuleiro:
+        if peca["cor"] == DESERTO:
+            return peca
+    return None
+
+def mover_ladrao_aleatorio(tabuleiro, ladrao_atual):
+    opcoes = []
+
+    for peca in tabuleiro:
+        if peca != ladrao_atual:
+            opcoes.append(peca)
+
+    if len(opcoes) > 0:
+        return random.choice(opcoes)
+
+    return ladrao_atual
+
+def roubar_recurso_ladrao(ladrao, jogador_atual, jogadores):
+    possiveis_vitimas = []
+
+    for aldeia in aldeias_construidas:
+        dono = aldeia["jogador"]
+
+        if dono == jogador_atual:
+            continue
+
+        vertice_aldeia = aldeia["vertice"]
+
+        for v in ladrao["vertices"]:
+            if math.hypot(v[0] - vertice_aldeia.x, v[1] - vertice_aldeia.y) < 5:
+                possiveis_vitimas.append(dono)
+                break
+
+    if len(possiveis_vitimas) == 0:
+        mensagem = "Nao ha jogadores para roubar neste hexagono."
+        print(mensagem)
+        return mensagem
+
+    vitima_indice = random.choice(possiveis_vitimas)
+    vitima = jogadores[vitima_indice]
+    jogador = jogadores[jogador_atual]
+
+    recursos_disponiveis = []
+
+    for recurso, quantidade in vitima["inventario"].items():
+        if quantidade > 0:
+            recursos_disponiveis.append(recurso)
+
+    if len(recursos_disponiveis) == 0:
+        mensagem = f"{vitima['nome']} nao tinha recursos para roubar."
+        print(mensagem)
+        return mensagem
+
+    recurso_roubado = random.choice(recursos_disponiveis)
+
+    vitima["inventario"][recurso_roubado] -= 1
+    jogador["inventario"][recurso_roubado] += 1
+
+    mensagem = f"{jogador['nome']} roubou 1 {recurso_roubado} de {vitima['nome']}."
+    print(mensagem)
+    return mensagem
+
 def main(game_mode="custom", num_players=2, num_humanos=2):
     relogio = pygame.time.Clock()
     tabuleiro, vertices_globais = gerar_tabuleiro()
+    ladrao = encontrar_deserto(tabuleiro)
     ultimo_dado = 0
+    mensagem_jogo = ""
     vertice_selecionado = None
     jogadores = criar_jogadores(num_players, num_humanos)
     jogador_atual = 0
@@ -705,12 +828,13 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
         if fase_inicial and fase_inicial_completa(jogadores):
             distribuir_recursos_iniciais(tabuleiro, jogadores)
+            limpar_dados_fase_inicial(jogadores)
             fase_inicial = False
             print("Fase inicial encerrada automaticamente. O jogo normal começou.")
             
         jogador = jogadores[jogador_atual]
 
-        if jogador["tipo"] == "bot":
+        if jogador["tipo"] == "bot" and vencedor is None:
             tempo_turno_bot += 1
 
             if tempo_turno_bot >= 60:
@@ -743,7 +867,15 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
                 else:
                     ultimo_dado = random.randint(1, 6) + random.randint(1, 6)
-                    distribuir_recursos(tabuleiro, ultimo_dado, jogadores)
+                    
+                    if ultimo_dado == 7:
+                        ladrao = mover_ladrao_aleatorio(tabuleiro, ladrao)
+                        mensagem_roubo = roubar_recurso_ladrao(ladrao, jogador_atual, jogadores)
+                        mensagem_jogo = f"Saiu 7! {mensagem_roubo}"
+                        print(mensagem_jogo)
+                    else:
+                        mensagem_jogo = ""
+                        distribuir_recursos(tabuleiro, ultimo_dado, jogadores, ladrao)
 
                     print(f"{jogador['nome']} rolou o dado: {ultimo_dado}")
 
@@ -794,7 +926,18 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                             if fase_inicial:
                                 limite_inicial = limite_fase_inicial_atual(indice_fase_inicial, jogadores)
 
-                            tentar_construir_aldeia(vertice_selecionado, vertices_globais, jogador_atual, jogadores, fase_inicial, limite_inicial)
+                            if not fase_inicial and not dado_rolado_no_turno:
+                                print("Você precisa rolar o dado antes de construir.")
+                            else:
+                                tentar_construir_aldeia(
+                                    vertice_selecionado,
+                                    vertices_globais,
+                                    jogador_atual,
+                                    jogadores,
+                                    fase_inicial,
+                                    limite_inicial
+                                )
+
                             vertice_selecionado = None
 
                         else:
@@ -814,13 +957,17 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                                     if fase_inicial:
                                         limite_inicial = limite_fase_inicial_atual(indice_fase_inicial, jogadores)
 
-                                    tentar_construir_estrada(
-                                        vertice_selecionado,
-                                        v,
-                                        jogador_atual,
-                                        jogadores,
-                                        fase_inicial,
-                                        limite_inicial)    
+                                    if not fase_inicial and not dado_rolado_no_turno:
+                                        print("Você precisa rolar o dado antes de construir.")
+                                    else:
+                                        tentar_construir_estrada(
+                                            vertice_selecionado,
+                                            v,
+                                            jogador_atual,
+                                            jogadores,
+                                            fase_inicial,
+                                            limite_inicial
+                                        )  
                                     estrada_tentada = True
                                     break
 
@@ -836,7 +983,16 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
                     elif not dado_rolado_no_turno:
                         ultimo_dado = random.randint(1, 6) + random.randint(1, 6)
-                        distribuir_recursos(tabuleiro, ultimo_dado, jogadores)
+                        
+                        if ultimo_dado == 7:
+                            ladrao = mover_ladrao_aleatorio(tabuleiro, ladrao)
+                            mensagem_roubo = roubar_recurso_ladrao(ladrao, jogador_atual, jogadores)
+                            mensagem_jogo = f"Saiu 7! {mensagem_roubo}"
+                            print(mensagem_jogo)
+                        else:
+                            mensagem_jogo = ""
+                            distribuir_recursos(tabuleiro, ultimo_dado, jogadores, ladrao)
+                        
                         dado_rolado_no_turno = True
                         print(f"{jogadores[jogador_atual]['nome']} rolou o dado: {ultimo_dado}")
 
@@ -857,8 +1013,11 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                                     print("Todos já fizeram suas jogadas iniciais.")
 
                         else:
-                            jogador_atual = passar_turno(jogador_atual, jogadores)
-                            dado_rolado_no_turno = False
+                            if not dado_rolado_no_turno:
+                                print("Você precisa rolar o dado antes de passar o turno.")
+                            else:
+                                jogador_atual = passar_turno(jogador_atual, jogadores)
+                                dado_rolado_no_turno = False
                 
                 elif evento.key == pygame.K_t:
                     dar_recursos_teste(jogadores[jogador_atual])
@@ -872,15 +1031,23 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                     print("Fase inicial encerrada. O jogo normal começou.")
 
                 elif evento.key == pygame.K_c:
-                    if vertice_selecionado is not None:
-                        tentar_construir_cidade(vertice_selecionado, jogador_atual, jogadores)
+                    if fase_inicial:
+                        print("Não é possível construir cidade durante a fase inicial.")
+
+                    elif vertice_selecionado is not None:
+                        if not dado_rolado_no_turno:
+                            print("Você precisa rolar o dado antes de construir.")
+                        else:
+                            tentar_construir_cidade(vertice_selecionado, jogador_atual, jogadores)
+
                         vertice_selecionado = None
+
                     else:
                         print("Selecione uma aldeia sua antes de apertar C.")
 
-        desenhar_tabuleiro(TELA, tabuleiro, ultimo_dado)
+        desenhar_tabuleiro(TELA, tabuleiro, ultimo_dado, ladrao)
         desenhar_vertices_e_aldeias(TELA, vertices_globais, vertice_selecionado, jogadores)
-        desenhar_interface(TELA, ultimo_dado, game_mode, jogadores[jogador_atual], vencedor, fase_inicial)
+        desenhar_interface(TELA, ultimo_dado, game_mode, jogadores[jogador_atual], vencedor, fase_inicial,jogadores, mensagem_jogo)
         
         pygame.display.flip()
         relogio.tick(60)
