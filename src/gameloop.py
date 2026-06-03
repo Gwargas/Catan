@@ -81,11 +81,13 @@ def criar_jogadores(num_players, num_humanos):
             nome = f"Bot {numero_bot}"
 
         jogadores.append({
+            "indice": i,
             "nome": nome,
             "tipo": tipo,
             "cor": cores[i],
             "inventario": criar_inventario(),
-            "pontos": 0
+            "pontos": 0,
+            "ultima_aldeia_inicial": None
         })
 
     return jogadores
@@ -228,7 +230,21 @@ def desenhar_vertices_e_aldeias(tela, vertices_globais, vertice_selecionado, jog
 
 
 
-def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor):
+def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fase_inicial):
+    if fase_inicial:
+        texto_fase = FONTE_TEXTO.render("Fase inicial: construa 2 aldeias e 2 estradas", True, PRETO)
+        tela.blit(texto_fase, (20, 120))
+
+        aldeias_iniciais = contar_construcoes_tipo_do_jogador(jogador_atual["indice"], "aldeia")
+        estradas_iniciais = contar_estradas_iniciais_do_jogador(jogador_atual["indice"])
+
+        texto_contagem = FONTE_TEXTO.render(
+            f"Iniciais: {aldeias_iniciais}/2 aldeias, {estradas_iniciais}/2 estradas",
+            True,
+            PRETO
+        )
+        tela.blit(texto_contagem, (20, 145))
+
     texto_modo = FONTE_TEXTO.render(f"Modo: {game_mode}", True, PRETO)
     tela.blit(texto_modo, (20, 20))
 
@@ -292,14 +308,27 @@ def contar_aldeias_do_jogador(jogador_atual):
 
     return total
 
-def tentar_construir_aldeia(pos, vertices_globais, jogador_atual, jogadores):
+def contar_construcoes_tipo_do_jogador(jogador_atual, tipo):
+    total = 0
+
+    for construcao in aldeias_construidas:
+        if construcao["jogador"] == jogador_atual and construcao["tipo"] == tipo:
+            total += 1
+
+    return total
+
+def tentar_construir_aldeia(pos, vertices_globais, jogador_atual, jogadores, fase_inicial=False, limite_inicial=2):
     jogador = jogadores[jogador_atual]
+
+    if fase_inicial and contar_construcoes_tipo_do_jogador(jogador_atual, "aldeia") >= limite_inicial:
+        print("Na fase inicial, este jogador já construiu suas 2 aldeias.")
+        return False
 
     if contar_aldeias_do_jogador(jogador_atual) >= LIMITE_ALDEIAS:
         print("Você já atingiu o limite de aldeias.")
         return False
 
-    if not tem_recursos(jogador, CUSTO_ALDEIA):
+    if not fase_inicial and not tem_recursos(jogador, CUSTO_ALDEIA):
         print("Recursos insuficientes para construir aldeia.")
         return False
 
@@ -312,17 +341,27 @@ def tentar_construir_aldeia(pos, vertices_globais, jogador_atual, jogadores):
             print("Não pode construir aldeia colada em outra aldeia.")
             return False
     
-    if jogador_tem_aldeia(jogador_atual) and not aldeia_conectada_ao_jogador(pos, jogador_atual):
+    if not fase_inicial and jogador_tem_aldeia(jogador_atual) and not aldeia_conectada_ao_jogador(pos, jogador_atual):
         print("A nova aldeia precisa estar conectada a uma estrada sua.")
         return False
 
-    gastar_recursos(jogador, CUSTO_ALDEIA)
+    if not fase_inicial:
+        gastar_recursos(jogador, CUSTO_ALDEIA)
+
+    numero_aldeia_inicial = None
+
+    if fase_inicial:
+        numero_aldeia_inicial = contar_construcoes_tipo_do_jogador(jogador_atual, "aldeia") + 1
 
     aldeias_construidas.append({
         "vertice": pos,
         "jogador": jogador_atual,
-        "tipo": "aldeia"
+        "tipo": "aldeia",
+        "inicial": numero_aldeia_inicial
     })
+
+    if fase_inicial:
+        jogador["ultima_aldeia_inicial"] = pos
 
     jogador["pontos"] += 1
 
@@ -356,14 +395,38 @@ def contar_estradas_do_jogador(jogador_atual):
 
     return total
 
-def tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores):
+def contar_estradas_iniciais_do_jogador(jogador_atual):
+    total = 0
+
+    for estrada in estradas_construidas:
+        if estrada["jogador"] == jogador_atual:
+            total += 1
+
+    return total
+
+def tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores, fase_inicial=False, limite_inicial=2):
     jogador = jogadores[jogador_atual]
+
+    if fase_inicial:
+        ultima_aldeia = jogador["ultima_aldeia_inicial"]
+
+        if ultima_aldeia is None:
+            print("Construa uma aldeia antes da estrada inicial.")
+            return False
+
+        if pos1 != ultima_aldeia and pos2 != ultima_aldeia:
+            print("Na fase inicial, a estrada precisa sair da aldeia recém-construída.")
+            return False
+    
+    if fase_inicial and contar_estradas_iniciais_do_jogador(jogador_atual) >= limite_inicial:
+        print("Na fase inicial, este jogador já construiu suas 2 estradas.")
+        return False
 
     if contar_estradas_do_jogador(jogador_atual) >= LIMITE_ESTRADAS:
         print("Você já atingiu o limite de estradas.")
         return False
 
-    if not tem_recursos(jogador, CUSTO_ESTRADA):
+    if not fase_inicial and not tem_recursos(jogador, CUSTO_ESTRADA):
         print("Recursos insuficientes para construir estrada.")
         return False
     
@@ -378,8 +441,9 @@ def tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores):
         if mesma_ordem or ordem_inversa:
             print("Já existe uma estrada neste caminho.")
             return False
-
-    gastar_recursos(jogador, CUSTO_ESTRADA)
+    
+    if not fase_inicial:
+        gastar_recursos(jogador, CUSTO_ESTRADA)
 
     estradas_construidas.append({
         "v1": pos1,
@@ -496,25 +560,25 @@ def dar_recursos_teste(jogador):
     jogador["inventario"]["Trigo"] += 1
     jogador["inventario"]["Minério"] += 1
 
-def bot_tentar_construir_aldeia(jogador_atual, jogadores, vertices_globais):
+def bot_tentar_construir_aldeia(jogador_atual, jogadores, vertices_globais, fase_inicial=False, limite_inicial=2):
     jogador = jogadores[jogador_atual]
 
-    if not tem_recursos(jogador, CUSTO_ALDEIA):
+    if not fase_inicial and not tem_recursos(jogador, CUSTO_ALDEIA):
         return False
 
     vertices_embaralhados = vertices_globais.copy()
     random.shuffle(vertices_embaralhados)
 
     for v in vertices_embaralhados:
-        if tentar_construir_aldeia(v, vertices_globais, jogador_atual, jogadores):
+        if tentar_construir_aldeia(v, vertices_globais, jogador_atual, jogadores, fase_inicial, limite_inicial):
             return True
 
     return False
 
-def bot_tentar_construir_estrada(jogador_atual, jogadores):
+def bot_tentar_construir_estrada(jogador_atual, jogadores, fase_inicial=False, limite_inicial=2):
     jogador = jogadores[jogador_atual]
 
-    if not tem_recursos(jogador, CUSTO_ESTRADA):
+    if not fase_inicial and not tem_recursos(jogador, CUSTO_ESTRADA):
         return False
 
     caminhos_possiveis = []
@@ -537,7 +601,7 @@ def bot_tentar_construir_estrada(jogador_atual, jogadores):
     random.shuffle(caminhos_possiveis)
 
     for pos1, pos2 in caminhos_possiveis:
-        if tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores):
+        if tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores, fase_inicial, limite_inicial):
             return True
 
     return False
@@ -562,6 +626,59 @@ def bot_tentar_construir_cidade(jogador_atual, jogadores):
 
     return False
 
+def dar_recursos_teste_para_todos(jogadores):
+    for jogador in jogadores:
+        dar_recursos_teste(jogador)
+
+    print("Recursos de teste adicionados para todos.")
+
+def fase_inicial_completa(jogadores):
+    for i in range(len(jogadores)):
+        tem_aldeia = contar_construcoes_tipo_do_jogador(i, "aldeia") >= 2
+        tem_estrada = contar_estradas_iniciais_do_jogador(i) >= 2
+
+        if not tem_aldeia or not tem_estrada:
+            return False
+
+    return True
+
+def distribuir_recursos_iniciais(tabuleiro, jogadores):
+    for aldeia in aldeias_construidas:
+        if aldeia.get("inicial") != 2:
+            continue
+
+        vertice_aldeia = aldeia["vertice"]
+        dono = aldeia["jogador"]
+
+        for peca in tabuleiro:
+            if peca["cor"] == DESERTO:
+                continue
+
+            recurso = MAPA_RECURSOS[peca["cor"]]
+
+            for v in peca["vertices"]:
+                if math.hypot(v[0] - vertice_aldeia.x, v[1] - vertice_aldeia.y) < 5:
+                    jogadores[dono]["inventario"][recurso] += 1
+                    print(f"{jogadores[dono]['nome']} recebeu 1 {recurso} inicial")
+
+def criar_ordem_fase_inicial(jogadores):
+    ordem_ida = list(range(len(jogadores)))
+    ordem_volta = list(reversed(range(len(jogadores))))
+    return ordem_ida + ordem_volta
+
+def limite_fase_inicial_atual(indice_fase_inicial, jogadores):
+    if indice_fase_inicial < len(jogadores):
+        return 1
+    return 2
+
+def jogador_completou_rodada_inicial(jogador_atual, indice_fase_inicial, jogadores):
+    limite_inicial = limite_fase_inicial_atual(indice_fase_inicial, jogadores)
+
+    aldeias = contar_construcoes_tipo_do_jogador(jogador_atual, "aldeia")
+    estradas = contar_estradas_iniciais_do_jogador(jogador_atual)
+
+    return aldeias >= limite_inicial and estradas >= limite_inicial
+
 def main(game_mode="custom", num_players=2, num_humanos=2):
     relogio = pygame.time.Clock()
     tabuleiro, vertices_globais = gerar_tabuleiro()
@@ -572,6 +689,10 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
     tempo_turno_bot = 0
     dado_rolado_no_turno = False
     vencedor = None
+    fase_inicial = True
+    ordem_fase_inicial = criar_ordem_fase_inicial(jogadores)
+    indice_fase_inicial = 0
+    jogador_atual = ordem_fase_inicial[indice_fase_inicial]
     
     print(f"Modo de jogo iniciado: {game_mode}")
     print(f"Jogadores criados: {[j['nome'] for j in jogadores]}")
@@ -581,24 +702,76 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
         TELA.fill(COR_FUNDO)
 
         vencedor = verificar_vencedor(jogadores)
+
+        if fase_inicial and fase_inicial_completa(jogadores):
+            distribuir_recursos_iniciais(tabuleiro, jogadores)
+            fase_inicial = False
+            print("Fase inicial encerrada automaticamente. O jogo normal começou.")
+            
         jogador = jogadores[jogador_atual]
 
         if jogador["tipo"] == "bot":
             tempo_turno_bot += 1
 
             if tempo_turno_bot >= 60:
-                ultimo_dado = random.randint(1, 6) + random.randint(1, 6)
-                distribuir_recursos(tabuleiro, ultimo_dado, jogadores)
+                if fase_inicial:
+                    print(f"{jogador['nome']} está posicionando peças iniciais.")
+                    limite_inicial = 2
 
-                print(f"{jogador['nome']} rolou o dado: {ultimo_dado}")
+                    if fase_inicial:
+                        limite_inicial = limite_fase_inicial_atual(indice_fase_inicial, jogadores)
 
-                dar_recursos_teste(jogador)
-                if not bot_tentar_construir_cidade(jogador_atual, jogadores):
-                    if not bot_tentar_construir_aldeia(jogador_atual, jogadores, vertices_globais):
-                        bot_tentar_construir_estrada(jogador_atual, jogadores)
-                        
-                jogador_atual = passar_turno(jogador_atual, jogadores)
-                dado_rolado_no_turno = False
+                    bot_tentar_construir_aldeia(
+                        jogador_atual,
+                        jogadores,
+                        vertices_globais,
+                        fase_inicial,
+                        limite_inicial
+                    )
+
+                    bot_tentar_construir_estrada(
+                        jogador_atual,
+                        jogadores,
+                        fase_inicial,
+                        limite_inicial
+                    )
+
+                    if not jogador_completou_rodada_inicial(jogador_atual, indice_fase_inicial, jogadores):
+                        print(f"{jogador['nome']} ainda não conseguiu posicionar tudo.")
+                        tempo_turno_bot = 0
+                        continue
+
+                else:
+                    ultimo_dado = random.randint(1, 6) + random.randint(1, 6)
+                    distribuir_recursos(tabuleiro, ultimo_dado, jogadores)
+
+                    print(f"{jogador['nome']} rolou o dado: {ultimo_dado}")
+
+                    if not bot_tentar_construir_cidade(jogador_atual, jogadores):
+                        if not bot_tentar_construir_aldeia(
+                            jogador_atual,
+                            jogadores,
+                            vertices_globais,
+                            fase_inicial
+                        ):
+                            bot_tentar_construir_estrada(
+                                jogador_atual,
+                                jogadores,
+                                fase_inicial
+                            )
+
+                if fase_inicial:
+                    indice_fase_inicial += 1
+
+                    if indice_fase_inicial < len(ordem_fase_inicial):
+                        jogador_atual = ordem_fase_inicial[indice_fase_inicial]
+                        print(f"Fase inicial: agora é a vez de {jogadores[jogador_atual]['nome']}")
+                    else:
+                        print("Todos já fizeram suas jogadas iniciais.")
+                else:
+                    jogador_atual = passar_turno(jogador_atual, jogadores)
+                    dado_rolado_no_turno = False
+
                 tempo_turno_bot = 0
         else:
             tempo_turno_bot = 0
@@ -616,7 +789,12 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                         vertice_selecionado = selecionar_ponto(evento.pos, vertices_globais)
                     else:
                         if math.dist(evento.pos, vertice_selecionado.pos) < 10:
-                            tentar_construir_aldeia(vertice_selecionado, vertices_globais, jogador_atual, jogadores)
+                            limite_inicial = 2
+
+                            if fase_inicial:
+                                limite_inicial = limite_fase_inicial_atual(indice_fase_inicial, jogadores)
+
+                            tentar_construir_aldeia(vertice_selecionado, vertices_globais, jogador_atual, jogadores, fase_inicial, limite_inicial)
                             vertice_selecionado = None
 
                         else:
@@ -631,7 +809,18 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                                 ) / math.dist(v.pos, vertice_selecionado.pos)
 
                                 if dist <= 5:
-                                    tentar_construir_estrada(vertice_selecionado, v, jogador_atual, jogadores)
+                                    limite_inicial = 2
+
+                                    if fase_inicial:
+                                        limite_inicial = limite_fase_inicial_atual(indice_fase_inicial, jogadores)
+
+                                    tentar_construir_estrada(
+                                        vertice_selecionado,
+                                        v,
+                                        jogador_atual,
+                                        jogadores,
+                                        fase_inicial,
+                                        limite_inicial)    
                                     estrada_tentada = True
                                     break
 
@@ -642,22 +831,46 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                     
             elif evento.type == pygame.KEYDOWN:
                 if evento.key == pygame.K_SPACE:
-                    if not dado_rolado_no_turno:
+                    if fase_inicial:
+                        print("Não é possível rolar dados durante a fase inicial.")
+
+                    elif not dado_rolado_no_turno:
                         ultimo_dado = random.randint(1, 6) + random.randint(1, 6)
                         distribuir_recursos(tabuleiro, ultimo_dado, jogadores)
                         dado_rolado_no_turno = True
                         print(f"{jogadores[jogador_atual]['nome']} rolou o dado: {ultimo_dado}")
+
                     else:
                         print("Você já rolou o dado neste turno.")
                 
                 elif evento.key == pygame.K_RETURN:
-                    jogador_atual = passar_turno(jogador_atual, jogadores)
-                    dado_rolado_no_turno = False
+                        if fase_inicial:
+                            if not jogador_completou_rodada_inicial(jogador_atual, indice_fase_inicial, jogadores):
+                                print("Você precisa construir 1 aldeia e 1 estrada antes de passar.")
+                            else:
+                                indice_fase_inicial += 1
+
+                                if indice_fase_inicial < len(ordem_fase_inicial):
+                                    jogador_atual = ordem_fase_inicial[indice_fase_inicial]
+                                    print(f"Fase inicial: agora é a vez de {jogadores[jogador_atual]['nome']}")
+                                else:
+                                    print("Todos já fizeram suas jogadas iniciais.")
+
+                        else:
+                            jogador_atual = passar_turno(jogador_atual, jogadores)
+                            dado_rolado_no_turno = False
                 
                 elif evento.key == pygame.K_t:
                     dar_recursos_teste(jogadores[jogador_atual])
                     print(f"Recursos adicionados para {jogadores[jogador_atual]['nome']}")
                 
+                elif evento.key == pygame.K_y:
+                    dar_recursos_teste_para_todos(jogadores)
+                
+                elif evento.key == pygame.K_i:
+                    fase_inicial = False
+                    print("Fase inicial encerrada. O jogo normal começou.")
+
                 elif evento.key == pygame.K_c:
                     if vertice_selecionado is not None:
                         tentar_construir_cidade(vertice_selecionado, jogador_atual, jogadores)
@@ -667,7 +880,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
         desenhar_tabuleiro(TELA, tabuleiro, ultimo_dado)
         desenhar_vertices_e_aldeias(TELA, vertices_globais, vertice_selecionado, jogadores)
-        desenhar_interface(TELA, ultimo_dado, game_mode, jogadores[jogador_atual], vencedor)
+        desenhar_interface(TELA, ultimo_dado, game_mode, jogadores[jogador_atual], vencedor, fase_inicial)
         
         pygame.display.flip()
         relogio.tick(60)
