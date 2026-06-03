@@ -284,13 +284,6 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
     cidades_restantes = LIMITE_CIDADES - contar_cidades_do_jogador(indice_jogador)
     estradas_restantes = LIMITE_ESTRADAS - contar_estradas_do_jogador(indice_jogador)
 
-    texto_pecas = FONTE_TEXTO.render(
-        f"Peças: {aldeias_restantes} aldeias, {cidades_restantes} cidades, {estradas_restantes} estradas",
-        True,
-        PRETO
-    )
-    #tela.blit(texto_pecas, (20, 95))
-
     if ultimo_dado > 0:
         msg_dado = FONTE_TITULO.render(f"Dado rolado: {ultimo_dado}", True, PRETO)
         tela.blit(msg_dado, (20, 170))
@@ -304,14 +297,14 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
             True,
             PRETO
         )
-        tela.blit(texto_descarte, (20, ALTURA - 115))
+        tela.blit(texto_descarte, (20, ALTURA - 130))
 
         texto_opcoes = FONTE_TEXTO.render(
             "1 Madeira | 2 Tijolo | 3 Ovelha | 4 Trigo | 5 Minerio",
             True,
             PRETO
         )
-        tela.blit(texto_opcoes, (20, ALTURA - 90))
+        tela.blit(texto_opcoes, (20, ALTURA - 105))
 
     if trocando_banco:
         taxa = taxa_troca_banco(jogador_atual["indice"], recurso_entregar_banco, portos)
@@ -1674,6 +1667,143 @@ def existe_acao_pendente(
         or usando_monopolio
     )
 
+def bot_escolher_recurso_ano_fartura(jogador):
+    prioridade = ["Minério", "Trigo", "Madeira", "Tijolo", "Ovelha"]
+    recursos_escolhidos = []
+
+    for recurso in prioridade:
+        recursos_escolhidos.append(recurso)
+
+        if len(recursos_escolhidos) == 2:
+            break
+
+    for recurso in recursos_escolhidos:
+        jogador["inventario"][recurso] += 1
+
+    mensagem = f"{jogador['nome']} usou Ano de Fartura e recebeu {recursos_escolhidos[0]} e {recursos_escolhidos[1]}."
+    print(mensagem)
+    return mensagem
+
+def bot_escolher_recurso_monopolio(jogador_atual, jogadores):
+    melhor_recurso = "Madeira"
+    maior_quantidade = -1
+
+    for recurso in RECURSOS:
+        total = 0
+
+        for i, jogador in enumerate(jogadores):
+            if i != jogador_atual:
+                total += jogador["inventario"][recurso]
+
+        if total > maior_quantidade:
+            maior_quantidade = total
+            melhor_recurso = recurso
+
+    return melhor_recurso
+
+def bot_tentar_usar_carta_desenvolvimento(jogador_atual, jogadores, tabuleiro, ladrao, vertices_globais):
+    jogador = jogadores[jogador_atual]
+
+    if jogador["usou_carta_dev_turno"]:
+        return ladrao, None
+
+    # 1. Cavaleiro
+    if jogador_tem_carta_usavel(jogador, "Cavaleiro"):
+        sucesso, mensagem = usar_cavaleiro(jogador)
+
+        if sucesso:
+            jogador["usou_carta_dev_turno"] = True
+
+            mensagem_maior_exercito = atualizar_maior_exercito(jogadores)
+
+            ladrao = mover_ladrao_aleatorio(tabuleiro, ladrao)
+            vitimas = encontrar_vitimas_ladrao(ladrao, jogador_atual)
+
+            if len(vitimas) > 0:
+                vitima = random.choice(vitimas)
+                mensagem_roubo = roubar_recurso_de_vitima(jogador_atual, vitima, jogadores)
+                mensagem = f"{mensagem} {mensagem_roubo}"
+            else:
+                mensagem = f"{mensagem} Ladrao movido. Nao ha vitimas."
+
+            if mensagem_maior_exercito is not None:
+                mensagem = f"{mensagem_maior_exercito} {mensagem}"
+
+            return ladrao, mensagem
+
+    # 2. Construção de Estradas
+    if jogador_tem_carta_usavel(jogador, "Construcao de Estradas"):
+        sucesso, mensagem = usar_construcao_de_estradas(jogador)
+
+        if sucesso:
+            jogador["usou_carta_dev_turno"] = True
+            estradas_construidas_bot = 0
+
+            for _ in range(2):
+                construiu = bot_tentar_construir_estrada(
+                    jogador_atual,
+                    jogadores,
+                    False,
+                    2
+                )
+
+                if construiu:
+                    estradas_construidas_bot += 1
+
+            mensagem = f"{jogador['nome']} usou Construcao de Estradas e construiu {estradas_construidas_bot} estrada(s)."
+            print(mensagem)
+            return ladrao, mensagem
+
+    # 3. Ano de Fartura
+    if jogador_tem_carta_usavel(jogador, "Ano de Fartura"):
+        sucesso, mensagem = usar_ano_de_fartura(jogador)
+
+        if sucesso:
+            jogador["usou_carta_dev_turno"] = True
+            mensagem = bot_escolher_recurso_ano_fartura(jogador)
+            return ladrao, mensagem
+
+    # 4. Monopólio
+    if jogador_tem_carta_usavel(jogador, "Monopolio"):
+        sucesso, mensagem = usar_monopolio(jogador)
+
+        if sucesso:
+            jogador["usou_carta_dev_turno"] = True
+            recurso = bot_escolher_recurso_monopolio(jogador_atual, jogadores)
+            mensagem = aplicar_monopolio(jogador_atual, jogadores, recurso)
+            return ladrao, mensagem
+
+    return ladrao, None
+
+def bot_tentar_comprar_carta_desenvolvimento(jogador, baralho):
+    if tem_recursos(jogador, CUSTO_DESENVOLVIMENTO):
+        mensagem = comprar_carta_desenvolvimento(jogador, baralho)
+        return mensagem
+
+    return None
+
+def bot_tentar_troca_banco(jogador_atual, jogadores, portos):
+    jogador = jogadores[jogador_atual]
+
+    recursos_prioridade_receber = ["Minério", "Trigo", "Madeira", "Tijolo", "Ovelha"]
+
+    for recurso_entregar in RECURSOS:
+        taxa = taxa_troca_banco(jogador_atual, recurso_entregar, portos)
+
+        if jogador["inventario"][recurso_entregar] >= taxa:
+            for recurso_receber in recursos_prioridade_receber:
+                if recurso_receber != recurso_entregar:
+                    mensagem = trocar_com_banco(
+                        jogador_atual,
+                        jogadores,
+                        recurso_entregar,
+                        recurso_receber,
+                        portos
+                    )
+                    return mensagem
+
+    return None
+
 def main(game_mode="custom", num_players=2, num_humanos=2):
     relogio = pygame.time.Clock()
     tabuleiro, vertices_globais = gerar_tabuleiro()
@@ -1821,18 +1951,44 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
                     print(f"{jogador['nome']} rolou o dado: {ultimo_dado}")
 
-                    if not bot_tentar_construir_cidade(jogador_atual, jogadores):
-                        if not bot_tentar_construir_aldeia(
-                            jogador_atual,
-                            jogadores,
-                            vertices_globais,
-                            fase_inicial
-                        ):
-                            bot_tentar_construir_estrada(
+                    ladrao, mensagem_carta_bot = bot_tentar_usar_carta_desenvolvimento(
+                        jogador_atual,
+                        jogadores,
+                        tabuleiro,
+                        ladrao,
+                        vertices_globais
+                    )
+
+                    if mensagem_carta_bot is not None:
+                        mensagem_jogo = mensagem_carta_bot
+
+                    construiu_algo = False
+
+                    if bot_tentar_construir_cidade(jogador_atual, jogadores):
+                        construiu_algo = True
+                    elif bot_tentar_construir_aldeia(jogador_atual, jogadores, vertices_globais, fase_inicial):
+                        construiu_algo = True
+                    elif bot_tentar_construir_estrada(jogador_atual, jogadores, fase_inicial):
+                        construiu_algo = True
+
+                    if not construiu_algo:
+                        mensagem_compra = bot_tentar_comprar_carta_desenvolvimento(
+                            jogador,
+                            baralho_desenvolvimento
+                        )
+
+                        if mensagem_compra is not None:
+                            mensagem_jogo = mensagem_compra
+
+                        else:
+                            mensagem_troca = bot_tentar_troca_banco(
                                 jogador_atual,
                                 jogadores,
-                                fase_inicial
+                                portos
                             )
+
+                            if mensagem_troca is not None:
+                                mensagem_jogo = mensagem_troca
 
                 if fase_inicial:
                     indice_fase_inicial += 1
@@ -1899,7 +2055,16 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
                         continue
                     
-                    if existe_acao_pendente(...):
+                    if existe_acao_pendente(
+                        escolhendo_ladrao,
+                        escolhendo_vitima_ladrao,
+                        descartando_recursos,
+                        trocando_banco,
+                        trocando_jogador,
+                        usando_construcao_estradas,
+                        usando_ano_fartura,
+                        usando_monopolio
+                    ):
                         mensagem_jogo = "Finalize a acao atual antes de fazer outra."
                         continue
 
