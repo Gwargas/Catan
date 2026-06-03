@@ -331,7 +331,7 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
                 PRETO
             )
 
-        tela.blit(texto_banco, (20, ALTURA - 90))
+        tela.blit(texto_banco, (20, ALTURA - 105))
 
     if trocando_jogador:
         textos_etapas = {
@@ -2851,7 +2851,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                     else:
                         trocando_banco = True
                         recurso_entregar_banco = None
-                        mensagem_jogo = "Banco 4:1 - escolha recurso para entregar: 1 Madeira, 2 Tijolo, 3 Ovelha, 4 Trigo, 5 Minerio."
+                        mensagem_jogo = "Banco - escolha recurso para entregar."
 
                 elif evento.key == pygame.K_c:
                     if fase_inicial:
