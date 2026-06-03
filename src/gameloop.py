@@ -238,7 +238,7 @@ def desenhar_vertices_e_aldeias(tela, vertices_globais, vertice_selecionado, jog
 
 
 
-def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fase_inicial, jogadores, mensagem_jogo, escolhendo_vitima_ladrao, vitimas_ladrao):
+def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fase_inicial, jogadores, mensagem_jogo, escolhendo_vitima_ladrao, vitimas_ladrao, descartando_recursos, jogador_descartando, quantidade_descartar, quantidade_descartada):
     if fase_inicial:
         texto_fase = FONTE_TEXTO.render("Fase inicial: construa 2 aldeias e 2 estradas", True, PRETO)
         tela.blit(texto_fase, (20, 120))
@@ -282,6 +282,24 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
     if ultimo_dado > 0:
         msg_dado = FONTE_TITULO.render(f"Dado rolado: {ultimo_dado}", True, PRETO)
         tela.blit(msg_dado, (20, 170))
+
+    if descartando_recursos and jogador_descartando is not None:
+        jogador_descarte = jogadores[jogador_descartando]
+        faltam = quantidade_descartar - quantidade_descartada
+
+        texto_descarte = FONTE_TEXTO.render(
+            f"{jogador_descarte['nome']} descartando: faltam {faltam}",
+            True,
+            PRETO
+        )
+        tela.blit(texto_descarte, (20, ALTURA - 115))
+
+        texto_opcoes = FONTE_TEXTO.render(
+            "1 Madeira | 2 Tijolo | 3 Ovelha | 4 Trigo | 5 Minerio",
+            True,
+            PRETO
+        )
+        tela.blit(texto_opcoes, (20, ALTURA - 90))
 
     if mensagem_jogo != "":
         texto_mensagem = FONTE_TITULO.render(mensagem_jogo, True, PRETO)
@@ -890,6 +908,83 @@ def roubar_recurso_de_vitima(jogador_atual, vitima_indice, jogadores):
     print(mensagem)
     return mensagem
 
+RECURSOS = ["Madeira", "Tijolo", "Ovelha", "Trigo", "Minério"]
+
+def total_recursos(jogador):
+    return sum(jogador["inventario"].values())
+
+
+def quantidade_para_descartar(jogador):
+    return total_recursos(jogador) // 2
+
+
+def criar_fila_descarte(jogadores):
+    fila = []
+
+    for i, jogador in enumerate(jogadores):
+        if total_recursos(jogador) > 7:
+            fila.append(i)
+
+    return fila
+
+
+def bot_descartar_recursos(jogador):
+    quantidade = quantidade_para_descartar(jogador)
+    descartados = []
+
+    while quantidade > 0:
+        recursos_disponiveis = []
+
+        for recurso in RECURSOS:
+            if jogador["inventario"][recurso] > 0:
+                recursos_disponiveis.append(recurso)
+
+        if len(recursos_disponiveis) == 0:
+            break
+
+        recurso_escolhido = random.choice(recursos_disponiveis)
+        jogador["inventario"][recurso_escolhido] -= 1
+        descartados.append(recurso_escolhido)
+        quantidade -= 1
+
+    mensagem = f"{jogador['nome']} descartou {len(descartados)} recurso(s)."
+    print(mensagem)
+    return mensagem
+
+
+def preparar_proximo_descarte(fila_descarte, jogadores):
+    mensagens_bot = []
+
+    while len(fila_descarte) > 0 and jogadores[fila_descarte[0]]["tipo"] == "bot":
+        bot_indice = fila_descarte.pop(0)
+        mensagem_bot = bot_descartar_recursos(jogadores[bot_indice])
+        mensagens_bot.append(mensagem_bot)
+
+    if len(fila_descarte) > 0:
+        jogador_indice = fila_descarte[0]
+        quantidade = quantidade_para_descartar(jogadores[jogador_indice])
+
+        return {
+            "descartando": True,
+            "jogador_descartando": jogador_indice,
+            "quantidade_para_descartar": quantidade,
+            "quantidade_descartada": 0,
+            "mensagem": f"{jogadores[jogador_indice]['nome']} deve descartar {quantidade} recurso(s)."
+        }
+
+    mensagem = "Descarte concluido."
+
+    if len(mensagens_bot) > 0:
+        mensagem = " ".join(mensagens_bot) + " " + mensagem
+
+    return {
+        "descartando": False,
+        "jogador_descartando": None,
+        "quantidade_para_descartar": 0,
+        "quantidade_descartada": 0,
+        "mensagem": mensagem
+    }
+
 def main(game_mode="custom", num_players=2, num_humanos=2):
     relogio = pygame.time.Clock()
     tabuleiro, vertices_globais = gerar_tabuleiro()
@@ -898,6 +993,12 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
     jogador_movendo_ladrao = None
     escolhendo_vitima_ladrao = False
     vitimas_ladrao = []
+    descartando_recursos = False
+    fila_descarte = []
+    jogador_descartando = None
+    quantidade_descartar = 0
+    quantidade_descartada = 0
+    jogador_que_rolou_7 = None
     ultimo_dado = 0
     mensagem_jogo = ""
     vertice_selecionado = None
@@ -911,6 +1012,37 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
     indice_fase_inicial = 0
     jogador_atual = ordem_fase_inicial[indice_fase_inicial]
     
+    def iniciar_ladrao_apos_descarte():
+        nonlocal escolhendo_ladrao
+        nonlocal jogador_movendo_ladrao
+        nonlocal ladrao
+        nonlocal mensagem_jogo
+        nonlocal escolhendo_vitima_ladrao
+        nonlocal vitimas_ladrao
+        nonlocal jogador_que_rolou_7
+
+        if jogadores[jogador_que_rolou_7]["tipo"] == "humano":
+            escolhendo_ladrao = True
+            jogador_movendo_ladrao = jogador_que_rolou_7
+            mensagem_jogo = "Clique em um terreno para mover o ladrao."
+        else:
+            ladrao = mover_ladrao_aleatorio(tabuleiro, ladrao)
+
+            vitimas_ladrao_bot = encontrar_vitimas_ladrao(ladrao, jogador_que_rolou_7)
+
+            if len(vitimas_ladrao_bot) == 0:
+                mensagem_jogo = "Saiu 7! Ladrao movido. Nao ha vitimas para roubar."
+            else:
+                vitima_escolhida = random.choice(vitimas_ladrao_bot)
+                mensagem_roubo = roubar_recurso_de_vitima(
+                    jogador_que_rolou_7,
+                    vitima_escolhida,
+                    jogadores
+                )
+                mensagem_jogo = f"Saiu 7! Ladrao movido. {mensagem_roubo}"
+
+            jogador_que_rolou_7 = None
+
     print(f"Modo de jogo iniciado: {game_mode}")
     print(f"Jogadores criados: {[j['nome'] for j in jogadores]}")
     
@@ -963,23 +1095,19 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                     ultimo_dado = random.randint(1, 6) + random.randint(1, 6)
                     
                     if ultimo_dado == 7:
-                        ladrao = mover_ladrao_aleatorio(tabuleiro, ladrao)
-                        
-                        vitimas_ladrao_bot = encontrar_vitimas_ladrao(ladrao, jogador_atual)
+                        jogador_que_rolou_7 = jogador_atual
+                        fila_descarte = criar_fila_descarte(jogadores)
 
-                        if len(vitimas_ladrao_bot) == 0:
-                            mensagem_jogo = "Saiu 7! Ladrao movido. Nao ha vitimas para roubar."
+                        estado_descarte = preparar_proximo_descarte(fila_descarte, jogadores)
 
-                        else:
-                            vitima_escolhida = random.choice(vitimas_ladrao_bot)
-                            mensagem_roubo = roubar_recurso_de_vitima(
-                                jogador_atual,
-                                vitima_escolhida,
-                                jogadores
-                            )
-                            mensagem_jogo = f"Saiu 7! Ladrao movido. {mensagem_roubo}"
+                        descartando_recursos = estado_descarte["descartando"]
+                        jogador_descartando = estado_descarte["jogador_descartando"]
+                        quantidade_descartar = estado_descarte["quantidade_para_descartar"]
+                        quantidade_descartada = estado_descarte["quantidade_descartada"]
+                        mensagem_jogo = estado_descarte["mensagem"]
 
-                        print(mensagem_jogo)
+                        if not descartando_recursos:
+                            iniciar_ladrao_apos_descarte()
                     else:
                         mensagem_jogo = ""
                         distribuir_recursos(tabuleiro, ultimo_dado, jogadores, ladrao)
@@ -1024,6 +1152,9 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                 
             elif evento.type == pygame.MOUSEBUTTONDOWN:
                 if evento.button == 1:
+                    if descartando_recursos:
+                        mensagem_jogo = "Termine o descarte antes de continuar."
+                        continue
                     if escolhendo_ladrao:
                         novo_ladrao = selecionar_hexagono(evento.pos, tabuleiro)
 
@@ -1142,6 +1273,45 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                             mensagem_jogo = "Vitima invalida."
 
                     continue
+                
+                if descartando_recursos:
+                    teclas_recursos = {
+                        pygame.K_1: "Madeira",
+                        pygame.K_2: "Tijolo",
+                        pygame.K_3: "Ovelha",
+                        pygame.K_4: "Trigo",
+                        pygame.K_5: "Minério"
+                    }
+
+                    if evento.key in teclas_recursos:
+                        recurso = teclas_recursos[evento.key]
+                        jogador_descarte = jogadores[jogador_descartando]
+
+                        if jogador_descarte["inventario"][recurso] > 0:
+                            jogador_descarte["inventario"][recurso] -= 1
+                            quantidade_descartada += 1
+
+                            restante = quantidade_descartar - quantidade_descartada
+                            mensagem_jogo = f"{jogador_descarte['nome']} descartou 1 {recurso}. Faltam {restante}."
+
+                            if quantidade_descartada >= quantidade_descartar:
+                                fila_descarte.pop(0)
+
+                                estado_descarte = preparar_proximo_descarte(fila_descarte, jogadores)
+
+                                descartando_recursos = estado_descarte["descartando"]
+                                jogador_descartando = estado_descarte["jogador_descartando"]
+                                quantidade_descartar = estado_descarte["quantidade_para_descartar"]
+                                quantidade_descartada = estado_descarte["quantidade_descartada"]
+                                mensagem_jogo = estado_descarte["mensagem"]
+
+                                if not descartando_recursos:
+                                    iniciar_ladrao_apos_descarte()
+                        else:
+                            mensagem_jogo = f"{jogador_descarte['nome']} nao tem {recurso} para descartar."
+
+                    continue
+
                 if evento.key == pygame.K_SPACE:
                     if fase_inicial:
                         print("Não é possível rolar dados durante a fase inicial.")
@@ -1150,10 +1320,19 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                         ultimo_dado = random.randint(1, 6) + random.randint(1, 6)
                         
                         if ultimo_dado == 7:
-                            escolhendo_ladrao = True
-                            jogador_movendo_ladrao = jogador_atual
-                            mensagem_jogo = "Saiu 7! Clique em um terreno para mover o ladrao."
-                            print(mensagem_jogo)
+                            jogador_que_rolou_7 = jogador_atual
+                            fila_descarte = criar_fila_descarte(jogadores)
+
+                            estado_descarte = preparar_proximo_descarte(fila_descarte, jogadores)
+
+                            descartando_recursos = estado_descarte["descartando"]
+                            jogador_descartando = estado_descarte["jogador_descartando"]
+                            quantidade_descartar = estado_descarte["quantidade_para_descartar"]
+                            quantidade_descartada = estado_descarte["quantidade_descartada"]
+                            mensagem_jogo = estado_descarte["mensagem"]
+
+                            if not descartando_recursos:
+                                iniciar_ladrao_apos_descarte()
                         else:
                             mensagem_jogo = ""
                             distribuir_recursos(tabuleiro, ultimo_dado, jogadores, ladrao)
@@ -1212,7 +1391,27 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
         desenhar_tabuleiro(TELA, tabuleiro, ultimo_dado, ladrao)
         desenhar_vertices_e_aldeias(TELA, vertices_globais, vertice_selecionado, jogadores)
-        desenhar_interface(TELA, ultimo_dado, game_mode, jogadores[jogador_atual], vencedor, fase_inicial,jogadores, mensagem_jogo, escolhendo_vitima_ladrao, vitimas_ladrao)
+        jogador_interface = jogadores[jogador_atual]
+
+        if descartando_recursos and jogador_descartando is not None:
+            jogador_interface = jogadores[jogador_descartando]
+
+        desenhar_interface(
+            TELA,
+            ultimo_dado,
+            game_mode,
+            jogador_interface,
+            vencedor,
+            fase_inicial,
+            jogadores,
+            mensagem_jogo,
+            escolhendo_vitima_ladrao,
+            vitimas_ladrao,
+            descartando_recursos,
+            jogador_descartando,
+            quantidade_descartar,
+            quantidade_descartada
+        )
         
         pygame.display.flip()
         relogio.tick(60)
