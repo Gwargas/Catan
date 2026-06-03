@@ -238,7 +238,7 @@ def desenhar_vertices_e_aldeias(tela, vertices_globais, vertice_selecionado, jog
 
 
 
-def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fase_inicial, jogadores, mensagem_jogo):
+def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fase_inicial, jogadores, mensagem_jogo, escolhendo_vitima_ladrao, vitimas_ladrao):
     if fase_inicial:
         texto_fase = FONTE_TEXTO.render("Fase inicial: construa 2 aldeias e 2 estradas", True, PRETO)
         tela.blit(texto_fase, (20, 120))
@@ -286,6 +286,25 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
     if mensagem_jogo != "":
         texto_mensagem = FONTE_TITULO.render(mensagem_jogo, True, PRETO)
         tela.blit(texto_mensagem, (20, ALTURA - 60))
+    
+    if escolhendo_vitima_ladrao:
+        y_vitima = ALTURA - 175
+
+        texto_instrucao = FONTE_TEXTO.render("Escolha a vitima do ladrao:", True, PRETO)
+        tela.blit(texto_instrucao, (20, y_vitima))
+
+        y_vitima += 25
+
+        for i, vitima_indice in enumerate(vitimas_ladrao):
+            jogador_vitima = jogadores[vitima_indice]
+
+            texto_vitima = FONTE_TEXTO.render(
+                f"{i + 1} - {jogador_vitima['nome']}",
+                True,
+                PRETO
+            )
+            tela.blit(texto_vitima, (20, y_vitima))
+            y_vitima += 25
     
     tela.blit(FONTE_TITULO.render("Pontuação:", True, PRETO), (LARGURA - 150, 210))
 
@@ -800,10 +819,85 @@ def roubar_recurso_ladrao(ladrao, jogador_atual, jogadores):
     print(mensagem)
     return mensagem
 
+def ponto_dentro_poligono(x, y, pontos):
+    dentro = False
+    j = len(pontos) - 1
+
+    for i in range(len(pontos)):
+        xi, yi = pontos[i]
+        xj, yj = pontos[j]
+
+        if (yi > y) != (yj > y):
+            x_intersecao = (xj - xi) * (y - yi) / (yj - yi) + xi
+
+            if x < x_intersecao:
+                dentro = not dentro
+
+        j = i
+
+    return dentro
+
+
+def selecionar_hexagono(pos_mouse, tabuleiro):
+    mx, my = pos_mouse
+
+    for peca in tabuleiro:
+        if ponto_dentro_poligono(mx, my, peca["vertices"]):
+            return peca
+
+    return None
+
+def encontrar_vitimas_ladrao(ladrao, jogador_atual):
+    vitimas = []
+
+    for aldeia in aldeias_construidas:
+        dono = aldeia["jogador"]
+
+        if dono == jogador_atual:
+            continue
+
+        vertice_aldeia = aldeia["vertice"]
+
+        for v in ladrao["vertices"]:
+            if math.hypot(v[0] - vertice_aldeia.x, v[1] - vertice_aldeia.y) < 5:
+                if dono not in vitimas:
+                    vitimas.append(dono)
+                break
+
+    return vitimas
+
+def roubar_recurso_de_vitima(jogador_atual, vitima_indice, jogadores):
+    jogador = jogadores[jogador_atual]
+    vitima = jogadores[vitima_indice]
+
+    recursos_disponiveis = []
+
+    for recurso, quantidade in vitima["inventario"].items():
+        if quantidade > 0:
+            recursos_disponiveis.append(recurso)
+
+    if len(recursos_disponiveis) == 0:
+        mensagem = f"{vitima['nome']} nao tinha recursos para roubar."
+        print(mensagem)
+        return mensagem
+
+    recurso_roubado = random.choice(recursos_disponiveis)
+
+    vitima["inventario"][recurso_roubado] -= 1
+    jogador["inventario"][recurso_roubado] += 1
+
+    mensagem = f"{jogador['nome']} roubou 1 {recurso_roubado} de {vitima['nome']}."
+    print(mensagem)
+    return mensagem
+
 def main(game_mode="custom", num_players=2, num_humanos=2):
     relogio = pygame.time.Clock()
     tabuleiro, vertices_globais = gerar_tabuleiro()
     ladrao = encontrar_deserto(tabuleiro)
+    escolhendo_ladrao = False
+    jogador_movendo_ladrao = None
+    escolhendo_vitima_ladrao = False
+    vitimas_ladrao = []
     ultimo_dado = 0
     mensagem_jogo = ""
     vertice_selecionado = None
@@ -870,8 +964,21 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                     
                     if ultimo_dado == 7:
                         ladrao = mover_ladrao_aleatorio(tabuleiro, ladrao)
-                        mensagem_roubo = roubar_recurso_ladrao(ladrao, jogador_atual, jogadores)
-                        mensagem_jogo = f"Saiu 7! {mensagem_roubo}"
+                        
+                        vitimas_ladrao_bot = encontrar_vitimas_ladrao(ladrao, jogador_atual)
+
+                        if len(vitimas_ladrao_bot) == 0:
+                            mensagem_jogo = "Saiu 7! Ladrao movido. Nao ha vitimas para roubar."
+
+                        else:
+                            vitima_escolhida = random.choice(vitimas_ladrao_bot)
+                            mensagem_roubo = roubar_recurso_de_vitima(
+                                jogador_atual,
+                                vitima_escolhida,
+                                jogadores
+                            )
+                            mensagem_jogo = f"Saiu 7! Ladrao movido. {mensagem_roubo}"
+
                         print(mensagem_jogo)
                     else:
                         mensagem_jogo = ""
@@ -917,6 +1024,43 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                 
             elif evento.type == pygame.MOUSEBUTTONDOWN:
                 if evento.button == 1:
+                    if escolhendo_ladrao:
+                        novo_ladrao = selecionar_hexagono(evento.pos, tabuleiro)
+
+                        if novo_ladrao is not None and novo_ladrao != ladrao:
+                            ladrao = novo_ladrao
+
+                            vitimas_ladrao = encontrar_vitimas_ladrao(ladrao, jogador_movendo_ladrao)
+                            print("Vitimas possiveis:", [jogadores[i]["nome"] for i in vitimas_ladrao])
+
+                            if len(vitimas_ladrao) == 0:
+                                mensagem_jogo = "Ladrao movido. Nao ha vitimas para roubar."
+                                escolhendo_ladrao = False
+                                jogador_movendo_ladrao = None
+
+                            elif len(vitimas_ladrao) == 1:
+                                mensagem_roubo = roubar_recurso_de_vitima(
+                                    jogador_movendo_ladrao,
+                                    vitimas_ladrao[0],
+                                    jogadores
+                                )
+                                mensagem_jogo = f"Ladrao movido. {mensagem_roubo}"
+                                escolhendo_ladrao = False
+                                jogador_movendo_ladrao = None
+
+                            else:
+                                escolhendo_vitima_ladrao = True
+                                mensagem_jogo = "Escolha a vitima: pressione 1, 2, 3..."
+                                escolhendo_ladrao = False
+
+                        elif novo_ladrao == ladrao:
+                            mensagem_jogo = "Escolha um terreno diferente."
+
+                        else:
+                            mensagem_jogo = "Clique em um terreno valido."
+
+                        continue
+
                     if vertice_selecionado == None:
                         vertice_selecionado = selecionar_ponto(evento.pos, vertices_globais)
                     else:
@@ -977,6 +1121,27 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                                 vertice_selecionado = None
                     
             elif evento.type == pygame.KEYDOWN:
+                if escolhendo_vitima_ladrao:
+                    if pygame.K_1 <= evento.key <= pygame.K_9:
+                        escolha = evento.key - pygame.K_1
+
+                        if escolha < len(vitimas_ladrao):
+                            vitima_indice = vitimas_ladrao[escolha]
+
+                            mensagem_roubo = roubar_recurso_de_vitima(
+                                jogador_movendo_ladrao,
+                                vitima_indice,
+                                jogadores
+                            )
+
+                            mensagem_jogo = mensagem_roubo
+                            escolhendo_vitima_ladrao = False
+                            vitimas_ladrao = []
+                            jogador_movendo_ladrao = None
+                        else:
+                            mensagem_jogo = "Vitima invalida."
+
+                    continue
                 if evento.key == pygame.K_SPACE:
                     if fase_inicial:
                         print("Não é possível rolar dados durante a fase inicial.")
@@ -985,9 +1150,9 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                         ultimo_dado = random.randint(1, 6) + random.randint(1, 6)
                         
                         if ultimo_dado == 7:
-                            ladrao = mover_ladrao_aleatorio(tabuleiro, ladrao)
-                            mensagem_roubo = roubar_recurso_ladrao(ladrao, jogador_atual, jogadores)
-                            mensagem_jogo = f"Saiu 7! {mensagem_roubo}"
+                            escolhendo_ladrao = True
+                            jogador_movendo_ladrao = jogador_atual
+                            mensagem_jogo = "Saiu 7! Clique em um terreno para mover o ladrao."
                             print(mensagem_jogo)
                         else:
                             mensagem_jogo = ""
@@ -1047,7 +1212,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
         desenhar_tabuleiro(TELA, tabuleiro, ultimo_dado, ladrao)
         desenhar_vertices_e_aldeias(TELA, vertices_globais, vertice_selecionado, jogadores)
-        desenhar_interface(TELA, ultimo_dado, game_mode, jogadores[jogador_atual], vencedor, fase_inicial,jogadores, mensagem_jogo)
+        desenhar_interface(TELA, ultimo_dado, game_mode, jogadores[jogador_atual], vencedor, fase_inicial,jogadores, mensagem_jogo, escolhendo_vitima_ladrao, vitimas_ladrao)
         
         pygame.display.flip()
         relogio.tick(60)
