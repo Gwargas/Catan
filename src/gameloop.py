@@ -4,7 +4,10 @@ import random
 import sys
 
 pygame.init()
-LARGURA, ALTURA = 800, 600
+LARGURA, ALTURA = 1100, 700
+PAINEL_X = 840
+PAINEL_LARGURA = 260
+AREA_MAPA_LARGURA = 820
 TELA = pygame.display.set_mode((LARGURA, ALTURA))
 pygame.display.set_caption("CATAN")
 FONTE_NUMEROS = pygame.font.SysFont("Arial", 24, bold=True)
@@ -87,7 +90,13 @@ def criar_jogadores(num_players, num_humanos):
             "cor": cores[i],
             "inventario": criar_inventario(),
             "pontos": 0,
-            "ultima_aldeia_inicial": None
+            "ultima_aldeia_inicial": None,
+            "cartas_dev": [],
+            "cartas_dev_compradas_turno": [],
+            "cavaleiros_usados": 0,
+            "maior_exercito": False,
+            "maior_estrada": False,
+            "usou_carta_dev_turno": False
         })
 
     return jogadores
@@ -119,7 +128,7 @@ def gerar_tabuleiro():
     tabuleiro = []
     vertices_globais = []
     
-    centro_tela_x = LARGURA // 2
+    centro_tela_x = AREA_MAPA_LARGURA // 2
     centro_tela_y = ALTURA // 2 - (2 * altura_hex * 0.75)
     
     idx_terreno = 0
@@ -238,10 +247,13 @@ def desenhar_vertices_e_aldeias(tela, vertices_globais, vertice_selecionado, jog
 
 
 
-def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fase_inicial, jogadores, mensagem_jogo, escolhendo_vitima_ladrao, vitimas_ladrao, descartando_recursos, jogador_descartando, quantidade_descartar, quantidade_descartada):
+def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fase_inicial, jogadores, mensagem_jogo, escolhendo_vitima_ladrao, vitimas_ladrao, descartando_recursos, jogador_descartando, quantidade_descartar, quantidade_descartada, trocando_banco, recurso_entregar_banco, trocando_jogador, etapa_troca_jogador, troca_jogador, portos, usando_construcao_estradas, estradas_gratis_restantes, usando_ano_fartura, recursos_ano_fartura, usando_monopolio):
+    pygame.draw.rect(tela, (180, 220, 235), (PAINEL_X, 0, PAINEL_LARGURA, ALTURA))
+    pygame.draw.line(tela, PRETO, (PAINEL_X, 0), (PAINEL_X, ALTURA), 2)
+
     if fase_inicial:
         texto_fase = FONTE_TEXTO.render("Fase inicial: construa 2 aldeias e 2 estradas", True, PRETO)
-        tela.blit(texto_fase, (20, 120))
+        tela.blit(texto_fase, (20, ALTURA - 105))
 
         aldeias_iniciais = contar_construcoes_tipo_do_jogador(jogador_atual["indice"], "aldeia")
         estradas_iniciais = contar_estradas_iniciais_do_jogador(jogador_atual["indice"])
@@ -251,7 +263,7 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
             True,
             PRETO
         )
-        tela.blit(texto_contagem, (20, 145))
+        tela.blit(texto_contagem, (20, ALTURA - 80))
 
     texto_modo = FONTE_TEXTO.render(f"Modo: {game_mode}", True, PRETO)
     tela.blit(texto_modo, (20, 20))
@@ -277,7 +289,7 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
         True,
         PRETO
     )
-    tela.blit(texto_pecas, (20, 95))
+    #tela.blit(texto_pecas, (20, 95))
 
     if ultimo_dado > 0:
         msg_dado = FONTE_TITULO.render(f"Dado rolado: {ultimo_dado}", True, PRETO)
@@ -301,10 +313,122 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
         )
         tela.blit(texto_opcoes, (20, ALTURA - 90))
 
+    if trocando_banco:
+        taxa = taxa_troca_banco(jogador_atual["indice"], recurso_entregar_banco, portos)
+
+        if recurso_entregar_banco is None:
+            texto_banco = FONTE_TEXTO.render(
+                f"Banco {taxa}:1 - entregando {recurso_entregar_banco}. Escolha o recurso para receber.",
+                True,
+                PRETO
+            )
+        else:
+            texto_banco = FONTE_TEXTO.render(
+                f"Banco {taxa}:1 - entregando {recurso_entregar_banco}. Escolha o recurso para receber.",
+                True,
+                PRETO
+            )
+
+        tela.blit(texto_banco, (20, ALTURA - 90))
+
+    if trocando_jogador:
+        textos_etapas = {
+            "escolher_alvo": "Escolha com quem deseja trocar",
+            "recurso_oferecido": "Escolha o recurso que voce vai oferecer",
+            "quantidade_oferecida": "Escolha quanto voce vai oferecer",
+            "recurso_pedido": "Escolha o recurso que voce quer receber",
+            "quantidade_pedida": "Escolha quanto voce quer receber",
+            "confirmar": "Aguardando resposta da troca"
+        }
+
+        texto_etapa = textos_etapas.get(etapa_troca_jogador, "Troca entre jogadores")
+
+        texto_troca = FONTE_TEXTO.render(
+            f"Troca entre jogadores: {texto_etapa}",
+            True,
+            PRETO
+        )
+        tela.blit(texto_troca, (20, ALTURA - 140))
+
+        if etapa_troca_jogador == "escolher_alvo":
+            y_alvo = ALTURA - 115
+            numero_opcao = 1
+
+            for i, jogador in enumerate(jogadores):
+                if i != jogador_atual["indice"]:
+                    texto_alvo = FONTE_TEXTO.render(
+                        f"{numero_opcao} - {jogador['nome']}",
+                        True,
+                        PRETO
+                    )
+                    tela.blit(texto_alvo, (20, y_alvo))
+                    y_alvo += 22
+                    numero_opcao += 1
+
+        elif etapa_troca_jogador in ["recurso_oferecido", "recurso_pedido"]:
+            texto_recursos = FONTE_TEXTO.render(
+                "1 Madeira | 2 Tijolo | 3 Ovelha | 4 Trigo | 5 Minerio",
+                True,
+                PRETO
+            )
+            tela.blit(texto_recursos, (20, ALTURA - 115))
+
+        elif etapa_troca_jogador in ["quantidade_oferecida", "quantidade_pedida"]:
+            texto_quantidade = FONTE_TEXTO.render(
+                "Escolha quantidade: 1 a 9",
+                True,
+                PRETO
+            )
+            tela.blit(texto_quantidade, (20, ALTURA - 115))
+
+        elif etapa_troca_jogador == "confirmar":
+            alvo = jogadores[troca_jogador["alvo"]]
+
+            texto_confirmar = FONTE_TEXTO.render(
+                f"{alvo['nome']}: S aceita | N recusa",
+                True,
+                PRETO
+            )
+            tela.blit(texto_confirmar, (20, ALTURA - 115))
+
+            texto_resumo = FONTE_TEXTO.render(
+                f"Recebe {troca_jogador['quantidade_oferecida']} {troca_jogador['recurso_oferecido']} "
+                f"e entrega {troca_jogador['quantidade_pedida']} {troca_jogador['recurso_pedido']}",
+                True,
+                PRETO
+            )
+            tela.blit(texto_resumo, (20, ALTURA - 90))
+
     if mensagem_jogo != "":
         texto_mensagem = FONTE_TITULO.render(mensagem_jogo, True, PRETO)
-        tela.blit(texto_mensagem, (20, ALTURA - 60))
+        tela.blit(texto_mensagem, (20, ALTURA - 80))
     
+    if usando_construcao_estradas:
+        texto_estradas_gratis = FONTE_TEXTO.render(
+            f"Construcao de Estradas ativa: faltam {estradas_gratis_restantes} estrada(s)",
+            True,
+            PRETO
+        )
+        tela.blit(texto_estradas_gratis, (20, ALTURA - 105))
+
+    if usando_ano_fartura:
+        faltam = 2 - len(recursos_ano_fartura)
+
+        texto_fartura = FONTE_TEXTO.render(
+            f"Ano de Fartura ativo: escolha {faltam} recurso(s). 1 Mad, 2 Tij, 3 Ove, 4 Tri, 5 Min",
+            True,
+            PRETO
+        )
+        tela.blit(texto_fartura, (20, ALTURA - 130))
+
+    if usando_monopolio:
+        texto_monopolio = FONTE_TEXTO.render(
+            "Monopolio ativo: escolha recurso. 1 Mad, 2 Tij, 3 Ove, 4 Tri, 5 Min",
+            True,
+            PRETO
+        )
+        tela.blit(texto_monopolio, (20, ALTURA - 155))
+
     if escolhendo_vitima_ladrao:
         y_vitima = ALTURA - 175
 
@@ -324,7 +448,53 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
             tela.blit(texto_vitima, (20, y_vitima))
             y_vitima += 25
     
-    tela.blit(FONTE_TITULO.render("Pontuação:", True, PRETO), (LARGURA - 150, 210))
+    tela.blit(FONTE_TITULO.render("Pontuação:", True, PRETO), (PAINEL_X + 20, 210))
+
+    tela.blit(FONTE_TITULO.render("Desenvolvimento:", True, PRETO), (PAINEL_X + 20, 360))
+
+    cartas = jogador_atual["cartas_dev"]
+    cavaleiros_na_mao = cartas.count("Cavaleiro")
+    pontos_vitoria_dev = cartas.count("Ponto de Vitoria")
+    construcao_estradas = cartas.count("Construcao de Estradas")
+    ano_fartura = cartas.count("Ano de Fartura")
+    monopolio = cartas.count("Monopolio")
+
+    texto_cartas = FONTE_TEXTO.render(f"Cartas totais: {len(cartas)}", True, PRETO)
+    tela.blit(texto_cartas, (PAINEL_X + 20, 400))
+
+    texto_cav_mao = FONTE_TEXTO.render(f"Cavaleiro na mao: {cavaleiros_na_mao}", True, PRETO)
+    tela.blit(texto_cav_mao, (PAINEL_X + 20, 425))
+
+    texto_cavaleiros = FONTE_TEXTO.render(
+        f"Cavaleiros usados: {jogador_atual['cavaleiros_usados']}",
+        True,
+        PRETO
+    )
+    tela.blit(texto_cavaleiros, (PAINEL_X + 20, 450))
+
+    dono_exercito = nome_dono_maior_exercito(jogadores)
+    texto_maior_exercito = FONTE_TEXTO.render(
+        f"Maior Exercito: {dono_exercito}",
+        True,
+        PRETO
+    )
+    tela.blit(texto_maior_exercito, (PAINEL_X + 20, 475))
+
+    dono_estrada = nome_dono_maior_estrada(jogadores)
+
+    texto_maior_estrada = FONTE_TEXTO.render(
+        f"Maior Estrada: {dono_estrada}",
+        True,
+        PRETO
+    )
+    tela.blit(texto_maior_estrada, (PAINEL_X + 20, 500))
+
+    texto_outras = FONTE_TEXTO.render(
+        f"PV:{pontos_vitoria_dev} CE:{construcao_estradas} AF:{ano_fartura} M:{monopolio}",
+        True,
+        PRETO
+    )
+    tela.blit(texto_outras, (PAINEL_X + 20, 525))
 
     y_pontos = 250
     for jogador in jogadores:
@@ -333,22 +503,29 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
             True,
             PRETO
         )
-        tela.blit(texto_ponto, (LARGURA - 150, y_pontos))
+        tela.blit(texto_ponto, (PAINEL_X + 20, y_pontos))
         y_pontos += 25
 
-    tela.blit(FONTE_TITULO.render("Inventário:", True, PRETO), (LARGURA - 150, 20))
+    tela.blit(FONTE_TITULO.render("Inventário:", True, PRETO), (PAINEL_X + 20, 20))
     y_inv = 60
     for recurso, quantidade in jogador_atual["inventario"].items():
         texto_rec = FONTE_TEXTO.render(f"{recurso}: {quantidade}", True, PRETO)
-        tela.blit(texto_rec, (LARGURA - 150, y_inv))
+        tela.blit(texto_rec, (PAINEL_X + 20, y_inv))
         y_inv += 30
     
-    texto_controles = FONTE_TEXTO.render(
-        "ESPACO: rolar dado | ENTER: passar turno | C: construir cidade",
+    texto_controles_1 = FONTE_TEXTO.render(
+        "ESPACO: rolar dados | ENTER: passar turno | C: construir cidade | D: comprar desenvolvimento",
         True,
         PRETO
     )
-    tela.blit(texto_controles, (20, ALTURA - 30))
+    tela.blit(texto_controles_1, (20, ALTURA - 50))
+
+    texto_controles_2 = FONTE_TEXTO.render(
+         "B: banco | P: propor troca | K: Cavaleiro | R: Estradas | F: Fartura | M: Monopolio",
+        True,
+        PRETO
+    )
+    tela.blit(texto_controles_2, (20, ALTURA - 25))
 
     if vencedor is not None:
         texto_vitoria = FONTE_TITULO.render(
@@ -371,12 +548,20 @@ def jogador_tem_aldeia(jogador_atual):
             return True
     return False
 
-
 def aldeia_conectada_ao_jogador(pos, jogador_atual):
     for estrada in estradas_construidas:
         if estrada["jogador"] == jogador_atual:
-            if estrada["v1"] == pos or estrada["v2"] == pos:
-                return True
+            if estrada["v1"] == pos:
+                origem = estrada["v2"]
+
+                if not vertice_tem_construcao_adversaria(origem, jogador_atual):
+                    return True
+
+            if estrada["v2"] == pos:
+                origem = estrada["v1"]
+
+                if not vertice_tem_construcao_adversaria(origem, jogador_atual):
+                    return True
 
     return False
 
@@ -452,18 +637,29 @@ def tentar_construir_aldeia(pos, vertices_globais, jogador_atual, jogadores, fas
     print(f"{jogador['nome']} construiu uma aldeia.")
     return True
 
+def vertice_tem_construcao_adversaria(vertice, jogador_atual):
+    for construcao in aldeias_construidas:
+        if construcao["vertice"] == vertice and construcao["jogador"] != jogador_atual:
+            return True
+
+    return False
+
 def estrada_conectada_ao_jogador(pos1, pos2, jogador_atual):
-    for aldeia in aldeias_construidas:
-        if aldeia["jogador"] == jogador_atual:
-            if aldeia["vertice"] == pos1 or aldeia["vertice"] == pos2:
+    
+    for construcao in aldeias_construidas:
+        if construcao["jogador"] == jogador_atual:
+            if construcao["vertice"] == pos1 or construcao["vertice"] == pos2:
                 return True
 
     for estrada in estradas_construidas:
         if estrada["jogador"] == jogador_atual:
             if estrada["v1"] == pos1 or estrada["v2"] == pos1:
-                return True
+                if not vertice_tem_construcao_adversaria(pos1, jogador_atual):
+                    return True
+
             if estrada["v1"] == pos2 or estrada["v2"] == pos2:
-                return True
+                if not vertice_tem_construcao_adversaria(pos2, jogador_atual):
+                    return True
 
     return False
 
@@ -485,7 +681,7 @@ def contar_estradas_iniciais_do_jogador(jogador_atual):
 
     return total
 
-def tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores, fase_inicial=False, limite_inicial=2):
+def tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores, fase_inicial=False, limite_inicial=2, estrada_gratis=False):
     jogador = jogadores[jogador_atual]
 
     if fase_inicial:
@@ -505,21 +701,9 @@ def tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores, fase_inicial=
         if pos1 != ultima_aldeia and pos2 != ultima_aldeia:
             print("Na fase inicial, a estrada precisa sair da aldeia recém-construída.")
             return False
-    
-    if fase_inicial and contar_estradas_iniciais_do_jogador(jogador_atual) >= limite_inicial:
-        print("Na fase inicial, este jogador já construiu suas 2 estradas.")
-        return False
 
     if contar_estradas_do_jogador(jogador_atual) >= LIMITE_ESTRADAS:
         print("Você já atingiu o limite de estradas.")
-        return False
-
-    if not fase_inicial and not tem_recursos(jogador, CUSTO_ESTRADA):
-        print("Recursos insuficientes para construir estrada.")
-        return False
-    
-    if not estrada_conectada_ao_jogador(pos1, pos2, jogador_atual):
-        print("A estrada precisa estar conectada a uma aldeia ou estrada sua.")
         return False
 
     for estrada in estradas_construidas:
@@ -529,8 +713,16 @@ def tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores, fase_inicial=
         if mesma_ordem or ordem_inversa:
             print("Já existe uma estrada neste caminho.")
             return False
-    
-    if not fase_inicial:
+
+    if not fase_inicial and not estrada_conectada_ao_jogador(pos1, pos2, jogador_atual):
+        print("A estrada precisa estar conectada a uma aldeia ou estrada sua.")
+        return False
+
+    if not fase_inicial and not estrada_gratis and not tem_recursos(jogador, CUSTO_ESTRADA):
+        print("Recursos insuficientes para construir estrada.")
+        return False
+
+    if not fase_inicial and not estrada_gratis:
         gastar_recursos(jogador, CUSTO_ESTRADA)
 
     estradas_construidas.append({
@@ -538,6 +730,10 @@ def tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores, fase_inicial=
         "v2": pos2,
         "jogador": jogador_atual
     })
+    mensagem_maior_estrada = atualizar_maior_estrada(jogadores)
+
+    if mensagem_maior_estrada is not None:
+        print(mensagem_maior_estrada)
 
     print(f"{jogador['nome']} construiu uma estrada.")
     return True
@@ -985,9 +1181,504 @@ def preparar_proximo_descarte(fila_descarte, jogadores):
         "mensagem": mensagem
     }
 
+def trocar_com_banco(jogador_atual, jogadores, recurso_entregar, recurso_receber, portos):
+    jogador = jogadores[jogador_atual]
+
+    if recurso_entregar == recurso_receber:
+        mensagem = "Escolha recursos diferentes para a troca."
+        print(mensagem)
+        return mensagem
+
+    taxa = taxa_troca_banco(jogador_atual, recurso_entregar, portos)
+
+    if jogador["inventario"][recurso_entregar] < taxa:
+        mensagem = f"{jogador['nome']} nao tem {taxa} {recurso_entregar} para trocar."
+        print(mensagem)
+        return mensagem
+
+    jogador["inventario"][recurso_entregar] -= taxa
+    jogador["inventario"][recurso_receber] += 1
+
+    mensagem = f"{jogador['nome']} trocou {taxa} {recurso_entregar} por 1 {recurso_receber}."
+    print(mensagem)
+    return mensagem
+
+def resetar_troca_jogador():
+    return {
+        "alvo": None,
+        "recurso_oferecido": None,
+        "quantidade_oferecida": 0,
+        "recurso_pedido": None,
+        "quantidade_pedida": 0
+    }
+
+
+def validar_e_fazer_troca_jogadores(jogador_atual, troca, jogadores):
+    jogador = jogadores[jogador_atual]
+    alvo = jogadores[troca["alvo"]]
+
+    recurso_oferecido = troca["recurso_oferecido"]
+    quantidade_oferecida = troca["quantidade_oferecida"]
+    recurso_pedido = troca["recurso_pedido"]
+    quantidade_pedida = troca["quantidade_pedida"]
+
+    if jogador["inventario"][recurso_oferecido] < quantidade_oferecida:
+        mensagem = f"{jogador['nome']} nao tem recursos suficientes para oferecer."
+        print(mensagem)
+        return mensagem
+
+    if alvo["inventario"][recurso_pedido] < quantidade_pedida:
+        mensagem = f"{alvo['nome']} nao tem recursos suficientes para aceitar."
+        print(mensagem)
+        return mensagem
+
+    jogador["inventario"][recurso_oferecido] -= quantidade_oferecida
+    alvo["inventario"][recurso_oferecido] += quantidade_oferecida
+
+    alvo["inventario"][recurso_pedido] -= quantidade_pedida
+    jogador["inventario"][recurso_pedido] += quantidade_pedida
+
+    mensagem = (
+        f"{jogador['nome']} trocou {quantidade_oferecida} {recurso_oferecido} "
+        f"por {quantidade_pedida} {recurso_pedido} com {alvo['nome']}."
+    )
+    print(mensagem)
+    return mensagem
+
+TIPOS_PORTOS = ["3:1", "3:1", "3:1", "3:1", "Madeira", "Tijolo", "Ovelha", "Trigo", "Minério"]
+
+
+def chave_aresta(p1, p2):
+    return tuple(sorted([p1, p2]))
+
+
+def encontrar_vertice_por_pos(pos, vertices_globais):
+    for v in vertices_globais:
+        if math.hypot(v.x - pos[0], v.y - pos[1]) < 5:
+            return v
+
+    return None
+
+
+def gerar_portos(tabuleiro, vertices_globais):
+    contagem_arestas = {}
+
+    for peca in tabuleiro:
+        pontos = peca["vertices"]
+
+        for i in range(6):
+            p1 = pontos[i]
+            p2 = pontos[(i + 1) % 6]
+            chave = chave_aresta(p1, p2)
+
+            if chave not in contagem_arestas:
+                contagem_arestas[chave] = 0
+
+            contagem_arestas[chave] += 1
+
+    arestas_borda = []
+
+    for chave, contagem in contagem_arestas.items():
+        if contagem == 1:
+            p1, p2 = chave
+            mx = (p1[0] + p2[0]) / 2
+            my = (p1[1] + p2[1]) / 2
+            angulo = math.atan2(my - ALTURA / 2, mx - AREA_MAPA_LARGURA / 2)
+
+            arestas_borda.append({
+                "p1": p1,
+                "p2": p2,
+                "angulo": angulo
+            })
+
+    arestas_borda.sort(key=lambda a: a["angulo"])
+
+    random.shuffle(TIPOS_PORTOS)
+
+    portos = []
+    quantidade_portos = 9
+
+    for i in range(quantidade_portos):
+        indice = int(i * len(arestas_borda) / quantidade_portos)
+        aresta = arestas_borda[indice]
+
+        v1 = encontrar_vertice_por_pos(aresta["p1"], vertices_globais)
+        v2 = encontrar_vertice_por_pos(aresta["p2"], vertices_globais)
+
+        if v1 is None or v2 is None:
+            continue
+
+        mx = (v1.x + v2.x) / 2
+        my = (v1.y + v2.y) / 2
+
+        dx = mx - AREA_MAPA_LARGURA / 2
+        dy = my - ALTURA / 2
+        dist = math.hypot(dx, dy)
+
+        if dist == 0:
+            dist = 1
+
+        texto_x = int(mx + (dx / dist) * 35)
+        texto_y = int(my + (dy / dist) * 35)
+
+        portos.append({
+            "v1": v1,
+            "v2": v2,
+            "tipo": TIPOS_PORTOS[i],
+            "texto_pos": (texto_x, texto_y)
+        })
+
+    return portos
+
+
+def jogador_tem_porto(jogador_atual, porto):
+    for construcao in aldeias_construidas:
+        if construcao["jogador"] == jogador_atual:
+            if construcao["vertice"] == porto["v1"] or construcao["vertice"] == porto["v2"]:
+                return True
+
+    return False
+
+
+def taxa_troca_banco(jogador_atual, recurso_entregar, portos):
+    melhor_taxa = 4
+
+    for porto in portos:
+        if jogador_tem_porto(jogador_atual, porto):
+            if porto["tipo"] == "3:1":
+                melhor_taxa = min(melhor_taxa, 3)
+
+            elif porto["tipo"] == recurso_entregar:
+                melhor_taxa = min(melhor_taxa, 2)
+
+    return melhor_taxa
+
+def desenhar_portos(tela, portos):
+    for porto in portos:
+        pygame.draw.line(tela, PRETO, porto["v1"].pos, porto["v2"].pos, 4)
+
+        texto = FONTE_TEXTO.render(porto["tipo"], True, PRETO)
+        rect = texto.get_rect(center=porto["texto_pos"])
+        tela.blit(texto, rect)
+
+CUSTO_DESENVOLVIMENTO = {
+    "Ovelha": 1,
+    "Trigo": 1,
+    "Minério": 1
+}
+
+CARTAS_DESENVOLVIMENTO_BASE = (
+    ["Cavaleiro"] * 14 +
+    ["Ponto de Vitoria"] * 5 +
+    ["Construcao de Estradas"] * 2 +
+    ["Ano de Fartura"] * 2 +
+    ["Monopolio"] * 2
+)
+
+def criar_baralho_desenvolvimento():
+    baralho = CARTAS_DESENVOLVIMENTO_BASE.copy()
+    random.shuffle(baralho)
+    return baralho
+
+
+def comprar_carta_desenvolvimento(jogador, baralho):
+    if len(baralho) == 0:
+        mensagem = "Nao ha mais cartas de desenvolvimento."
+        print(mensagem)
+        return mensagem
+
+    if not tem_recursos(jogador, CUSTO_DESENVOLVIMENTO):
+        mensagem = "Recursos insuficientes para comprar carta de desenvolvimento."
+        print(mensagem)
+        return mensagem
+
+    gastar_recursos(jogador, CUSTO_DESENVOLVIMENTO)
+
+    carta = baralho.pop()
+    jogador["cartas_dev"].append(carta)
+    jogador["cartas_dev_compradas_turno"].append(carta)
+
+    if carta == "Ponto de Vitoria":
+        jogador["pontos"] += 1
+        mensagem = f"{jogador['nome']} comprou Ponto de Vitoria."
+    else:
+        mensagem = f"{jogador['nome']} comprou carta de desenvolvimento: {carta}."
+    
+    print(mensagem)
+    return mensagem
+
+
+def jogador_tem_carta_usavel(jogador, carta):
+    quantidade_total = jogador["cartas_dev"].count(carta)
+    quantidade_comprada_turno = jogador["cartas_dev_compradas_turno"].count(carta)
+
+    return quantidade_total > quantidade_comprada_turno
+
+
+def usar_cavaleiro(jogador):
+    if not jogador_tem_carta_usavel(jogador, "Cavaleiro"):
+        mensagem = "Voce nao tem Cavaleiro disponivel para usar."
+        print(mensagem)
+        return False, mensagem
+
+    jogador["cartas_dev"].remove("Cavaleiro")
+    jogador["cavaleiros_usados"] += 1
+
+    mensagem = f"{jogador['nome']} usou um Cavaleiro."
+    print(mensagem)
+    return True, mensagem
+
+
+def limpar_cartas_compradas_turno(jogador):
+    jogador["cartas_dev_compradas_turno"] = []
+
+def atualizar_maior_exercito(jogadores):
+    dono_atual = None
+
+    for i, jogador in enumerate(jogadores):
+        if jogador["maior_exercito"]:
+            dono_atual = i
+            break
+
+    melhor_jogador = None
+    maior_quantidade = 0
+
+    for i, jogador in enumerate(jogadores):
+        if jogador["cavaleiros_usados"] >= 3:
+            if jogador["cavaleiros_usados"] > maior_quantidade:
+                maior_quantidade = jogador["cavaleiros_usados"]
+                melhor_jogador = i
+
+    if melhor_jogador is None:
+        return None
+
+    if dono_atual is None:
+        jogadores[melhor_jogador]["maior_exercito"] = True
+        jogadores[melhor_jogador]["pontos"] += 2
+        mensagem = f"{jogadores[melhor_jogador]['nome']} ganhou Maior Exercito!"
+        print(mensagem)
+        return mensagem
+
+    if melhor_jogador != dono_atual:
+        if jogadores[melhor_jogador]["cavaleiros_usados"] > jogadores[dono_atual]["cavaleiros_usados"]:
+            jogadores[dono_atual]["maior_exercito"] = False
+            jogadores[dono_atual]["pontos"] -= 2
+
+            jogadores[melhor_jogador]["maior_exercito"] = True
+            jogadores[melhor_jogador]["pontos"] += 2
+
+            mensagem = f"{jogadores[melhor_jogador]['nome']} tomou Maior Exercito!"
+            print(mensagem)
+            return mensagem
+
+    return None
+
+def nome_dono_maior_exercito(jogadores):
+    for jogador in jogadores:
+        if jogador["maior_exercito"]:
+            return jogador["nome"]
+
+    return "Ninguem"
+
+def nome_dono_maior_estrada(jogadores):
+    for jogador in jogadores:
+        if jogador["maior_estrada"]:
+            return jogador["nome"]
+
+    return "Ninguem"
+
+
+def estradas_do_jogador(jogador_atual):
+    lista = []
+
+    for estrada in estradas_construidas:
+        if estrada["jogador"] == jogador_atual:
+            lista.append(estrada)
+
+    return lista
+
+
+def vertices_iguais(v1, v2):
+    return v1 == v2
+
+
+def calcular_maior_caminho_estradas(jogador_atual):
+    estradas = estradas_do_jogador(jogador_atual)
+
+    if len(estradas) == 0:
+        return 0
+
+    maior = 0
+
+    def buscar(vertice_atual, estradas_usadas):
+        melhor_local = len(estradas_usadas)
+
+        for i, estrada in enumerate(estradas):
+            if i in estradas_usadas:
+                continue
+
+            proximo = None
+
+            if vertices_iguais(estrada["v1"], vertice_atual):
+                proximo = estrada["v2"]
+            elif vertices_iguais(estrada["v2"], vertice_atual):
+                proximo = estrada["v1"]
+
+            if proximo is None:
+                continue
+
+            if vertice_tem_construcao_adversaria(vertice_atual, jogador_atual):
+                continue
+
+            novo_usadas = estradas_usadas.copy()
+            novo_usadas.add(i)
+
+            tamanho = buscar(proximo, novo_usadas)
+
+            if tamanho > melhor_local:
+                melhor_local = tamanho
+
+        return melhor_local
+
+    for estrada in estradas:
+        tamanho_1 = buscar(estrada["v1"], set())
+        tamanho_2 = buscar(estrada["v2"], set())
+
+        if tamanho_1 > maior:
+            maior = tamanho_1
+
+        if tamanho_2 > maior:
+            maior = tamanho_2
+
+    return maior
+
+
+def atualizar_maior_estrada(jogadores):
+    dono_atual = None
+
+    for i, jogador in enumerate(jogadores):
+        if jogador["maior_estrada"]:
+            dono_atual = i
+            break
+
+    melhor_jogador = None
+    maior_tamanho = 0
+
+    for i, jogador in enumerate(jogadores):
+        tamanho = calcular_maior_caminho_estradas(i)
+
+        if tamanho >= 5 and tamanho > maior_tamanho:
+            maior_tamanho = tamanho
+            melhor_jogador = i
+
+    if melhor_jogador is None:
+        return None
+
+    if dono_atual is None:
+        jogadores[melhor_jogador]["maior_estrada"] = True
+        jogadores[melhor_jogador]["pontos"] += 2
+
+        mensagem = f"{jogadores[melhor_jogador]['nome']} ganhou Maior Estrada!"
+        print(mensagem)
+        return mensagem
+
+    tamanho_dono = calcular_maior_caminho_estradas(dono_atual)
+
+    if melhor_jogador != dono_atual and maior_tamanho > tamanho_dono:
+        jogadores[dono_atual]["maior_estrada"] = False
+        jogadores[dono_atual]["pontos"] -= 2
+
+        jogadores[melhor_jogador]["maior_estrada"] = True
+        jogadores[melhor_jogador]["pontos"] += 2
+
+        mensagem = f"{jogadores[melhor_jogador]['nome']} tomou Maior Estrada!"
+        print(mensagem)
+        return mensagem
+
+    return None
+
+def usar_construcao_de_estradas(jogador):
+    if not jogador_tem_carta_usavel(jogador, "Construcao de Estradas"):
+        mensagem = "Voce nao tem Construcao de Estradas disponivel para usar."
+        print(mensagem)
+        return False, mensagem
+
+    jogador["cartas_dev"].remove("Construcao de Estradas")
+
+    mensagem = f"{jogador['nome']} usou Construcao de Estradas."
+    print(mensagem)
+    return True, mensagem
+
+def usar_ano_de_fartura(jogador):
+    if not jogador_tem_carta_usavel(jogador, "Ano de Fartura"):
+        mensagem = "Voce nao tem Ano de Fartura disponivel para usar."
+        print(mensagem)
+        return False, mensagem
+
+    jogador["cartas_dev"].remove("Ano de Fartura")
+
+    mensagem = f"{jogador['nome']} usou Ano de Fartura."
+    print(mensagem)
+    return True, mensagem
+
+def usar_monopolio(jogador):
+    if not jogador_tem_carta_usavel(jogador, "Monopolio"):
+        mensagem = "Voce nao tem Monopolio disponivel para usar."
+        print(mensagem)
+        return False, mensagem
+
+    jogador["cartas_dev"].remove("Monopolio")
+
+    mensagem = f"{jogador['nome']} usou Monopolio."
+    print(mensagem)
+    return True, mensagem
+
+
+def aplicar_monopolio(jogador_atual, jogadores, recurso):
+    jogador = jogadores[jogador_atual]
+    total_roubado = 0
+
+    for i, outro_jogador in enumerate(jogadores):
+        if i == jogador_atual:
+            continue
+
+        quantidade = outro_jogador["inventario"][recurso]
+
+        if quantidade > 0:
+            outro_jogador["inventario"][recurso] -= quantidade
+            jogador["inventario"][recurso] += quantidade
+            total_roubado += quantidade
+
+    mensagem = f"{jogador['nome']} pegou {total_roubado} {recurso} com Monopolio."
+    print(mensagem)
+    return mensagem
+
+def existe_acao_pendente(
+    escolhendo_ladrao,
+    escolhendo_vitima_ladrao,
+    descartando_recursos,
+    trocando_banco,
+    trocando_jogador,
+    usando_construcao_estradas,
+    usando_ano_fartura,
+    usando_monopolio
+):
+    return (
+        escolhendo_ladrao
+        or escolhendo_vitima_ladrao
+        or descartando_recursos
+        or trocando_banco
+        or trocando_jogador
+        or usando_construcao_estradas
+        or usando_ano_fartura
+        or usando_monopolio
+    )
+
 def main(game_mode="custom", num_players=2, num_humanos=2):
     relogio = pygame.time.Clock()
     tabuleiro, vertices_globais = gerar_tabuleiro()
+    baralho_desenvolvimento = criar_baralho_desenvolvimento()
+    portos = gerar_portos(tabuleiro, vertices_globais)
     ladrao = encontrar_deserto(tabuleiro)
     escolhendo_ladrao = False
     jogador_movendo_ladrao = None
@@ -1011,7 +1702,23 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
     ordem_fase_inicial = criar_ordem_fase_inicial(jogadores)
     indice_fase_inicial = 0
     jogador_atual = ordem_fase_inicial[indice_fase_inicial]
-    
+    trocando_banco = False
+    recurso_entregar_banco = None
+    trocando_jogador = False
+    etapa_troca_jogador = None
+    troca_jogador = {
+        "alvo": None,
+        "recurso_oferecido": None,
+        "quantidade_oferecida": 0,
+        "recurso_pedido": None,
+        "quantidade_pedida": 0
+    }
+    usando_construcao_estradas = False
+    estradas_gratis_restantes = 0
+    usando_ano_fartura = False
+    recursos_ano_fartura = []
+    usando_monopolio = False
+
     def iniciar_ladrao_apos_descarte():
         nonlocal escolhendo_ladrao
         nonlocal jogador_movendo_ladrao
@@ -1191,6 +1898,26 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                             mensagem_jogo = "Clique em um terreno valido."
 
                         continue
+                    
+                    if existe_acao_pendente(...):
+                        mensagem_jogo = "Finalize a acao atual antes de fazer outra."
+                        continue
+
+                    if trocando_banco:
+                        mensagem_jogo = "Termine ou cancele a troca com banco antes de continuar."
+                        continue
+
+                    if trocando_jogador:
+                        mensagem_jogo = "Termine ou cancele a troca entre jogadores antes de continuar."
+                        continue
+
+                    if usando_ano_fartura:
+                        mensagem_jogo = "Termine o Ano de Fartura antes de continuar."
+                        continue
+
+                    if usando_monopolio:
+                        mensagem_jogo = "Termine o Monopolio antes de continuar."
+                        continue
 
                     if vertice_selecionado == None:
                         vertice_selecionado = selecionar_ponto(evento.pos, vertices_globais)
@@ -1200,6 +1927,10 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
                             if fase_inicial:
                                 limite_inicial = limite_fase_inicial_atual(indice_fase_inicial, jogadores)
+
+                            if usando_construcao_estradas:
+                                mensagem_jogo = "Voce esta usando Construcao de Estradas. Construa estradas, nao aldeias."
+                                vertice_selecionado = None
 
                             if not fase_inicial and not dado_rolado_no_turno:
                                 print("Você precisa rolar o dado antes de construir.")
@@ -1235,14 +1966,38 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                                     if not fase_inicial and not dado_rolado_no_turno:
                                         print("Você precisa rolar o dado antes de construir.")
                                     else:
-                                        tentar_construir_estrada(
-                                            vertice_selecionado,
-                                            v,
-                                            jogador_atual,
-                                            jogadores,
-                                            fase_inicial,
-                                            limite_inicial
-                                        )  
+                                        if usando_construcao_estradas:
+                                            construiu = tentar_construir_estrada(
+                                                vertice_selecionado,
+                                                v,
+                                                jogador_atual,
+                                                jogadores,
+                                                fase_inicial,
+                                                limite_inicial,
+                                                True
+                                            )
+
+                                            if construiu:
+                                                estradas_gratis_restantes -= 1
+
+                                                if estradas_gratis_restantes > 0:
+                                                    mensagem_jogo = f"Construcao de Estradas: faltam {estradas_gratis_restantes} estrada(s)."
+                                                else:
+                                                    usando_construcao_estradas = False
+                                                    mensagem_jogo = "Construcao de Estradas concluida."
+
+                                        else:
+                                            if not fase_inicial and not dado_rolado_no_turno:
+                                                print("Você precisa rolar o dado antes de construir.")
+                                            else:
+                                                tentar_construir_estrada(
+                                                    vertice_selecionado,
+                                                    v,
+                                                    jogador_atual,
+                                                    jogadores,
+                                                    fase_inicial,
+                                                    limite_inicial
+                                                )
                                     estrada_tentada = True
                                     break
 
@@ -1311,6 +2066,186 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                             mensagem_jogo = f"{jogador_descarte['nome']} nao tem {recurso} para descartar."
 
                     continue
+                
+                if trocando_banco:
+                    teclas_recursos = {
+                        pygame.K_1: "Madeira",
+                        pygame.K_2: "Tijolo",
+                        pygame.K_3: "Ovelha",
+                        pygame.K_4: "Trigo",
+                        pygame.K_5: "Minério"
+                    }
+
+                    if evento.key in teclas_recursos:
+                        recurso_escolhido = teclas_recursos[evento.key]
+
+                        if recurso_entregar_banco is None:
+                            recurso_entregar_banco = recurso_escolhido
+                            mensagem_jogo = f"Banco: entregar {recurso_entregar_banco}. Agora escolha o recurso para receber."
+                        else:
+                            mensagem_jogo = trocar_com_banco(
+                                jogador_atual,
+                                jogadores,
+                                recurso_entregar_banco,
+                                recurso_escolhido,
+                                portos
+                            )
+
+                            trocando_banco = False
+                            recurso_entregar_banco = None
+
+                    elif evento.key == pygame.K_ESCAPE:
+                        trocando_banco = False
+                        recurso_entregar_banco = None
+                        mensagem_jogo = "Troca com banco cancelada."
+
+                    continue
+                if trocando_jogador:
+                    teclas_recursos = {
+                        pygame.K_1: "Madeira",
+                        pygame.K_2: "Tijolo",
+                        pygame.K_3: "Ovelha",
+                        pygame.K_4: "Trigo",
+                        pygame.K_5: "Minério"
+                    }
+
+                    if evento.key == pygame.K_ESCAPE:
+                        trocando_jogador = False
+                        etapa_troca_jogador = None
+                        troca_jogador = resetar_troca_jogador()
+                        mensagem_jogo = "Troca entre jogadores cancelada."
+                        continue
+
+                    if etapa_troca_jogador == "escolher_alvo":
+                        if pygame.K_1 <= evento.key <= pygame.K_9:
+                            escolha = evento.key - pygame.K_1
+
+                            alvos_possiveis = []
+                            for i in range(len(jogadores)):
+                                if i != jogador_atual:
+                                    alvos_possiveis.append(i)
+
+                            if escolha < len(alvos_possiveis):
+                                troca_jogador["alvo"] = alvos_possiveis[escolha]
+                                etapa_troca_jogador = "recurso_oferecido"
+                                mensagem_jogo = "Escolha recurso para oferecer: 1 Mad, 2 Tij, 3 Ove, 4 Tri, 5 Min."
+                            else:
+                                mensagem_jogo = "Jogador alvo invalido."
+
+                        continue
+
+                    if etapa_troca_jogador == "recurso_oferecido":
+                        if evento.key in teclas_recursos:
+                            troca_jogador["recurso_oferecido"] = teclas_recursos[evento.key]
+                            etapa_troca_jogador = "quantidade_oferecida"
+                            mensagem_jogo = "Escolha quantidade oferecida: 1 a 9."
+                        continue
+
+                    if etapa_troca_jogador == "quantidade_oferecida":
+                        if pygame.K_1 <= evento.key <= pygame.K_9:
+                            troca_jogador["quantidade_oferecida"] = evento.key - pygame.K_0
+                            etapa_troca_jogador = "recurso_pedido"
+                            mensagem_jogo = "Escolha recurso pedido: 1 Mad, 2 Tij, 3 Ove, 4 Tri, 5 Min."
+                        continue
+
+                    if etapa_troca_jogador == "recurso_pedido":
+                        if evento.key in teclas_recursos:
+                            troca_jogador["recurso_pedido"] = teclas_recursos[evento.key]
+                            etapa_troca_jogador = "quantidade_pedida"
+                            mensagem_jogo = "Escolha quantidade pedida: 1 a 9."
+                        continue
+
+                    if etapa_troca_jogador == "quantidade_pedida":
+                        if pygame.K_1 <= evento.key <= pygame.K_9:
+                            troca_jogador["quantidade_pedida"] = evento.key - pygame.K_0
+                            etapa_troca_jogador = "confirmar"
+                            alvo = jogadores[troca_jogador["alvo"]]
+
+                            mensagem_jogo = (
+                                f"{alvo['nome']}: S aceita / N recusa. "
+                                f"Recebe {troca_jogador['quantidade_oferecida']} {troca_jogador['recurso_oferecido']} "
+                                f"e entrega {troca_jogador['quantidade_pedida']} {troca_jogador['recurso_pedido']}."
+                            )
+                        continue
+
+                    if etapa_troca_jogador == "confirmar":
+                        if evento.key == pygame.K_s:
+                            mensagem_jogo = validar_e_fazer_troca_jogadores(
+                                jogador_atual,
+                                troca_jogador,
+                                jogadores
+                            )
+                            trocando_jogador = False
+                            etapa_troca_jogador = None
+                            troca_jogador = resetar_troca_jogador()
+
+                        elif evento.key == pygame.K_n:
+                            mensagem_jogo = "Troca recusada."
+                            trocando_jogador = False
+                            etapa_troca_jogador = None
+                            troca_jogador = resetar_troca_jogador()
+
+                        continue
+
+                    continue
+
+                if usando_ano_fartura:
+                    teclas_recursos = {
+                        pygame.K_1: "Madeira",
+                        pygame.K_2: "Tijolo",
+                        pygame.K_3: "Ovelha",
+                        pygame.K_4: "Trigo",
+                        pygame.K_5: "Minério"
+                    }
+
+                    if evento.key in teclas_recursos:
+                        recurso = teclas_recursos[evento.key]
+                        recursos_ano_fartura.append(recurso)
+                        jogadores[jogador_atual]["inventario"][recurso] += 1
+
+                        if len(recursos_ano_fartura) < 2:
+                            mensagem_jogo = f"Voce recebeu 1 {recurso}. Escolha mais 1 recurso."
+                        else:
+                            usando_ano_fartura = False
+                            mensagem_jogo = (
+                                f"Ano de Fartura concluido: recebeu "
+                                f"{recursos_ano_fartura[0]} e {recursos_ano_fartura[1]}."
+                            )
+                            recursos_ano_fartura = []
+
+                    elif evento.key == pygame.K_ESCAPE:
+                        mensagem_jogo = "Nao e possivel cancelar apos iniciar Ano de Fartura."
+
+                    continue
+
+                if usando_monopolio:
+                    teclas_recursos = {
+                        pygame.K_1: "Madeira",
+                        pygame.K_2: "Tijolo",
+                        pygame.K_3: "Ovelha",
+                        pygame.K_4: "Trigo",
+                        pygame.K_5: "Minério"
+                    }
+
+                    if evento.key in teclas_recursos:
+                        recurso = teclas_recursos[evento.key]
+                        mensagem_jogo = aplicar_monopolio(jogador_atual, jogadores, recurso)
+                        usando_monopolio = False
+
+                    continue
+                
+                if existe_acao_pendente(
+                    escolhendo_ladrao,
+                    escolhendo_vitima_ladrao,
+                    descartando_recursos,
+                    trocando_banco,
+                    trocando_jogador,
+                    usando_construcao_estradas,
+                    usando_ano_fartura,
+                    usando_monopolio
+                ):
+                    mensagem_jogo = "Finalize a acao atual antes de fazer outra."
+                    continue
 
                 if evento.key == pygame.K_SPACE:
                     if fase_inicial:
@@ -1344,7 +2279,19 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                         print("Você já rolou o dado neste turno.")
                 
                 elif evento.key == pygame.K_RETURN:
-                        if fase_inicial:
+                        if (
+                            escolhendo_ladrao
+                            or escolhendo_vitima_ladrao
+                            or descartando_recursos
+                            or trocando_banco
+                            or trocando_jogador
+                            or usando_construcao_estradas
+                            or usando_ano_fartura
+                            or usando_monopolio
+                        ):
+                            mensagem_jogo = "Finalize a acao atual antes de passar o turno."
+                        
+                        elif fase_inicial:
                             if not jogador_completou_rodada_inicial(jogador_atual, indice_fase_inicial, jogadores):
                                 print("Você precisa construir 1 aldeia e 1 estrada antes de passar.")
                             else:
@@ -1360,9 +2307,126 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                             if not dado_rolado_no_turno:
                                 print("Você precisa rolar o dado antes de passar o turno.")
                             else:
+                                limpar_cartas_compradas_turno(jogadores[jogador_atual])
+                                jogadores[jogador_atual]["usou_carta_dev_turno"] = False
                                 jogador_atual = passar_turno(jogador_atual, jogadores)
                                 dado_rolado_no_turno = False
                 
+                elif evento.key == pygame.K_p:
+                    if fase_inicial:
+                        mensagem_jogo = "Nao e possivel trocar durante a fase inicial."
+                    elif not dado_rolado_no_turno:
+                        mensagem_jogo = "Role o dado antes de trocar."
+                    else:
+                        trocando_jogador = True
+                        etapa_troca_jogador = "escolher_alvo"
+                        troca_jogador = resetar_troca_jogador()
+                        mensagem_jogo = "Escolha jogador para trocar: pressione 1, 2, 3..."
+                
+                elif evento.key == pygame.K_d:
+                    if fase_inicial:
+                        mensagem_jogo = "Nao e possivel comprar desenvolvimento durante a fase inicial."
+                    elif not dado_rolado_no_turno:
+                        mensagem_jogo = "Role o dado antes de comprar desenvolvimento."
+                    else:
+                        mensagem_jogo = comprar_carta_desenvolvimento(
+                            jogadores[jogador_atual],
+                            baralho_desenvolvimento
+                        )
+                elif evento.key == pygame.K_m:
+                    jogador = jogadores[jogador_atual]
+
+                    if fase_inicial:
+                        mensagem_jogo = "Nao e possivel usar Monopolio durante a fase inicial."
+
+                    elif escolhendo_ladrao or escolhendo_vitima_ladrao:
+                        mensagem_jogo = "Finalize a acao do ladrao antes de usar outra carta."
+
+                    elif jogador["usou_carta_dev_turno"]:
+                        mensagem_jogo = "Voce ja usou uma carta de desenvolvimento neste turno."
+
+                    else:
+                        sucesso, mensagem = usar_monopolio(jogador)
+                        mensagem_jogo = mensagem
+
+                        if sucesso:
+                            jogador["usou_carta_dev_turno"] = True
+                            usando_monopolio = True
+                            mensagem_jogo = "Monopolio: escolha recurso. 1 Mad, 2 Tij, 3 Ove, 4 Tri, 5 Min."
+                            
+                elif evento.key == pygame.K_f:
+                    jogador = jogadores[jogador_atual]
+
+                    if fase_inicial:
+                        mensagem_jogo = "Nao e possivel usar Ano de Fartura durante a fase inicial."
+
+                    elif escolhendo_ladrao or escolhendo_vitima_ladrao:
+                        mensagem_jogo = "Finalize a acao do ladrao antes de usar outra carta."
+
+                    elif jogador["usou_carta_dev_turno"]:
+                        mensagem_jogo = "Voce ja usou uma carta de desenvolvimento neste turno."
+
+                    else:
+                        sucesso, mensagem = usar_ano_de_fartura(jogador)
+                        mensagem_jogo = mensagem
+
+                        if sucesso:
+                            jogador["usou_carta_dev_turno"] = True
+                            usando_ano_fartura = True
+                            recursos_ano_fartura = []
+                            mensagem_jogo = "Ano de Fartura: escolha 2 recursos. 1 Mad, 2 Tij, 3 Ove, 4 Tri, 5 Min."
+
+                elif evento.key == pygame.K_k:
+                    jogador = jogadores[jogador_atual]
+
+                    if fase_inicial:
+                        mensagem_jogo = "Nao e possivel usar Cavaleiro durante a fase inicial."
+
+                    elif escolhendo_ladrao or escolhendo_vitima_ladrao:
+                        mensagem_jogo = "Finalize a acao do ladrao antes de usar outra carta."
+
+                    elif jogador["usou_carta_dev_turno"]:
+                        mensagem_jogo = "Voce ja usou uma carta de desenvolvimento neste turno."
+
+                    else:
+                        sucesso, mensagem = usar_cavaleiro(jogador)
+                        mensagem_jogo = mensagem
+
+                        if sucesso:
+                            jogador["usou_carta_dev_turno"] = True
+
+                            mensagem_maior_exercito = atualizar_maior_exercito(jogadores)
+
+                            escolhendo_ladrao = True
+                            jogador_movendo_ladrao = jogador_atual
+
+                            if mensagem_maior_exercito is not None:
+                                mensagem_jogo = f"{mensagem_maior_exercito} Clique em um terreno para mover o ladrao."
+                            else:
+                                mensagem_jogo = "Cavaleiro usado! Clique em um terreno para mover o ladrao."
+
+                elif evento.key == pygame.K_r:
+                    jogador = jogadores[jogador_atual]
+
+                    if fase_inicial:
+                        mensagem_jogo = "Nao e possivel usar Construcao de Estradas durante a fase inicial."
+
+                    elif escolhendo_ladrao or escolhendo_vitima_ladrao:
+                        mensagem_jogo = "Finalize a acao do ladrao antes de usar outra carta."
+
+                    elif jogador["usou_carta_dev_turno"]:
+                        mensagem_jogo = "Voce ja usou uma carta de desenvolvimento neste turno."
+
+                    else:
+                        sucesso, mensagem = usar_construcao_de_estradas(jogador)
+                        mensagem_jogo = mensagem
+
+                        if sucesso:
+                            jogador["usou_carta_dev_turno"] = True
+                            usando_construcao_estradas = True
+                            estradas_gratis_restantes = 2
+                            mensagem_jogo = "Construcao de Estradas: construa 2 estradas gratis."
+
                 elif evento.key == pygame.K_t:
                     dar_recursos_teste(jogadores[jogador_atual])
                     print(f"Recursos adicionados para {jogadores[jogador_atual]['nome']}")
@@ -1373,6 +2437,16 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                 elif evento.key == pygame.K_i:
                     fase_inicial = False
                     print("Fase inicial encerrada. O jogo normal começou.")
+
+                elif evento.key == pygame.K_b:
+                    if fase_inicial:
+                        mensagem_jogo = "Nao e possivel trocar durante a fase inicial."
+                    elif not dado_rolado_no_turno:
+                        mensagem_jogo = "Role o dado antes de trocar."
+                    else:
+                        trocando_banco = True
+                        recurso_entregar_banco = None
+                        mensagem_jogo = "Banco 4:1 - escolha recurso para entregar: 1 Madeira, 2 Tijolo, 3 Ovelha, 4 Trigo, 5 Minerio."
 
                 elif evento.key == pygame.K_c:
                     if fase_inicial:
@@ -1390,6 +2464,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                         print("Selecione uma aldeia sua antes de apertar C.")
 
         desenhar_tabuleiro(TELA, tabuleiro, ultimo_dado, ladrao)
+        desenhar_portos(TELA, portos)
         desenhar_vertices_e_aldeias(TELA, vertices_globais, vertice_selecionado, jogadores)
         jogador_interface = jogadores[jogador_atual]
 
@@ -1410,9 +2485,20 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
             descartando_recursos,
             jogador_descartando,
             quantidade_descartar,
-            quantidade_descartada
+            quantidade_descartada,
+            trocando_banco, 
+            recurso_entregar_banco,
+            trocando_jogador, 
+            etapa_troca_jogador, 
+            troca_jogador,
+            portos, 
+            usando_construcao_estradas, 
+            estradas_gratis_restantes,
+            usando_ano_fartura,
+            recursos_ano_fartura,
+            usando_monopolio
         )
-        
+
         pygame.display.flip()
         relogio.tick(60)
 
