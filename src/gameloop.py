@@ -283,8 +283,21 @@ def aldeia_conectada_ao_jogador(pos, jogador_atual):
 
     return False
 
+def contar_aldeias_do_jogador(jogador_atual):
+    total = 0
+
+    for construcao in aldeias_construidas:
+        if construcao["jogador"] == jogador_atual and construcao["tipo"] == "aldeia":
+            total += 1
+
+    return total
+
 def tentar_construir_aldeia(pos, vertices_globais, jogador_atual, jogadores):
     jogador = jogadores[jogador_atual]
+
+    if contar_aldeias_do_jogador(jogador_atual) >= LIMITE_ALDEIAS:
+        print("Você já atingiu o limite de aldeias.")
+        return False
 
     if not tem_recursos(jogador, CUSTO_ALDEIA):
         print("Recursos insuficientes para construir aldeia.")
@@ -334,8 +347,21 @@ def estrada_conectada_ao_jogador(pos1, pos2, jogador_atual):
 
     return False
 
+def contar_estradas_do_jogador(jogador_atual):
+    total = 0
+
+    for estrada in estradas_construidas:
+        if estrada["jogador"] == jogador_atual:
+            total += 1
+
+    return total
+
 def tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores):
     jogador = jogadores[jogador_atual]
+
+    if contar_estradas_do_jogador(jogador_atual) >= LIMITE_ESTRADAS:
+        print("Você já atingiu o limite de estradas.")
+        return False
 
     if not tem_recursos(jogador, CUSTO_ESTRADA):
         print("Recursos insuficientes para construir estrada.")
@@ -364,8 +390,21 @@ def tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores):
     print(f"{jogador['nome']} construiu uma estrada.")
     return True
 
+def contar_cidades_do_jogador(jogador_atual):
+    total = 0
+
+    for construcao in aldeias_construidas:
+        if construcao["jogador"] == jogador_atual and construcao["tipo"] == "cidade":
+            total += 1
+
+    return total
+
 def tentar_construir_cidade(pos, jogador_atual, jogadores):
     jogador = jogadores[jogador_atual]
+
+    if contar_cidades_do_jogador(jogador_atual) >= LIMITE_CIDADES:
+        print("Você já atingiu o limite de cidades.")
+        return False
 
     for construcao in aldeias_construidas:
         if construcao["vertice"] == pos and construcao["jogador"] == jogador_atual:
@@ -440,12 +479,88 @@ CUSTO_CIDADE = {
 }
 
 PONTOS_PARA_VENCER = 10
+LIMITE_ALDEIAS = 5
+LIMITE_CIDADES = 4
+LIMITE_ESTRADAS = 15
 
 def verificar_vencedor(jogadores):
     for jogador in jogadores:
         if jogador["pontos"] >= PONTOS_PARA_VENCER:
             return jogador
     return None
+
+def dar_recursos_teste(jogador):
+    jogador["inventario"]["Madeira"] += 1
+    jogador["inventario"]["Tijolo"] += 1
+    jogador["inventario"]["Ovelha"] += 1
+    jogador["inventario"]["Trigo"] += 1
+    jogador["inventario"]["Minério"] += 1
+
+def bot_tentar_construir_aldeia(jogador_atual, jogadores, vertices_globais):
+    jogador = jogadores[jogador_atual]
+
+    if not tem_recursos(jogador, CUSTO_ALDEIA):
+        return False
+
+    vertices_embaralhados = vertices_globais.copy()
+    random.shuffle(vertices_embaralhados)
+
+    for v in vertices_embaralhados:
+        if tentar_construir_aldeia(v, vertices_globais, jogador_atual, jogadores):
+            return True
+
+    return False
+
+def bot_tentar_construir_estrada(jogador_atual, jogadores):
+    jogador = jogadores[jogador_atual]
+
+    if not tem_recursos(jogador, CUSTO_ESTRADA):
+        return False
+
+    caminhos_possiveis = []
+
+    for aldeia in aldeias_construidas:
+        if aldeia["jogador"] == jogador_atual:
+            v_origem = aldeia["vertice"]
+
+            for vizinho in v_origem.vizinhos:
+                caminhos_possiveis.append((v_origem, vizinho))
+
+    for estrada in estradas_construidas:
+        if estrada["jogador"] == jogador_atual:
+            for vizinho in estrada["v1"].vizinhos:
+                caminhos_possiveis.append((estrada["v1"], vizinho))
+
+            for vizinho in estrada["v2"].vizinhos:
+                caminhos_possiveis.append((estrada["v2"], vizinho))
+
+    random.shuffle(caminhos_possiveis)
+
+    for pos1, pos2 in caminhos_possiveis:
+        if tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores):
+            return True
+
+    return False
+
+def bot_tentar_construir_cidade(jogador_atual, jogadores):
+    jogador = jogadores[jogador_atual]
+
+    if not tem_recursos(jogador, CUSTO_CIDADE):
+        return False
+
+    aldeias_do_bot = []
+
+    for construcao in aldeias_construidas:
+        if construcao["jogador"] == jogador_atual and construcao["tipo"] == "aldeia":
+            aldeias_do_bot.append(construcao["vertice"])
+
+    random.shuffle(aldeias_do_bot)
+
+    for vertice in aldeias_do_bot:
+        if tentar_construir_cidade(vertice, jogador_atual, jogadores):
+            return True
+
+    return False
 
 def main(game_mode="custom", num_players=2, num_humanos=2):
     relogio = pygame.time.Clock()
@@ -477,6 +592,11 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
                 print(f"{jogador['nome']} rolou o dado: {ultimo_dado}")
 
+                dar_recursos_teste(jogador)
+                if not bot_tentar_construir_cidade(jogador_atual, jogadores):
+                    if not bot_tentar_construir_aldeia(jogador_atual, jogadores, vertices_globais):
+                        bot_tentar_construir_estrada(jogador_atual, jogadores)
+                        
                 jogador_atual = passar_turno(jogador_atual, jogadores)
                 dado_rolado_no_turno = False
                 tempo_turno_bot = 0
@@ -535,11 +655,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                     dado_rolado_no_turno = False
                 
                 elif evento.key == pygame.K_t:
-                    jogadores[jogador_atual]["inventario"]["Madeira"] += 1
-                    jogadores[jogador_atual]["inventario"]["Tijolo"] += 1
-                    jogadores[jogador_atual]["inventario"]["Ovelha"] += 1
-                    jogadores[jogador_atual]["inventario"]["Trigo"] += 1
-                    jogadores[jogador_atual]["inventario"]["Minério"] += 1
+                    dar_recursos_teste(jogadores[jogador_atual])
                     print(f"Recursos adicionados para {jogadores[jogador_atual]['nome']}")
                 
                 elif evento.key == pygame.K_c:
