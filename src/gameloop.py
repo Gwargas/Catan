@@ -247,7 +247,7 @@ def desenhar_vertices_e_aldeias(tela, vertices_globais, vertice_selecionado, jog
 
 
 
-def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fase_inicial, jogadores, mensagem_jogo, escolhendo_vitima_ladrao, vitimas_ladrao, descartando_recursos, jogador_descartando, quantidade_descartar, quantidade_descartada, trocando_banco, recurso_entregar_banco, trocando_jogador, etapa_troca_jogador, troca_jogador, portos, usando_construcao_estradas, estradas_gratis_restantes, usando_ano_fartura, recursos_ano_fartura, usando_monopolio):
+def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fase_inicial, jogadores, mensagem_jogo, escolhendo_vitima_ladrao, vitimas_ladrao, descartando_recursos, jogador_descartando, quantidade_descartar, quantidade_descartada, trocando_banco, recurso_entregar_banco, trocando_jogador, etapa_troca_jogador, troca_jogador, portos, usando_construcao_estradas, estradas_gratis_restantes, usando_ano_fartura, recursos_ano_fartura, usando_monopolio, historico_dados):
     pygame.draw.rect(tela, (180, 220, 235), (PAINEL_X, 0, PAINEL_LARGURA, ALTURA))
     pygame.draw.line(tela, PRETO, (PAINEL_X, 0), (PAINEL_X, ALTURA), 2)
 
@@ -284,9 +284,18 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
     cidades_restantes = LIMITE_CIDADES - contar_cidades_do_jogador(indice_jogador)
     estradas_restantes = LIMITE_ESTRADAS - contar_estradas_do_jogador(indice_jogador)
 
-    if ultimo_dado > 0:
-        msg_dado = FONTE_TITULO.render(f"Dado rolado: {ultimo_dado}", True, PRETO)
-        tela.blit(msg_dado, (20, 170))
+    tela.blit(FONTE_TITULO.render("Historico dos dados:", True, PRETO), (20, 95))
+
+    y_dados = 120
+
+    if len(historico_dados) == 0:
+        texto_sem_dados = FONTE_TEXTO.render("Nenhum dado rolado ainda.", True, PRETO)
+        tela.blit(texto_sem_dados, (20, y_dados))
+    else:
+        for item in historico_dados[-5:]:
+            texto_dado = FONTE_TEXTO.render(item, True, PRETO)
+            tela.blit(texto_dado, (20, y_dados))
+            y_dados += 24
 
     if descartando_recursos and jogador_descartando is not None:
         jogador_descarte = jogadores[jogador_descartando]
@@ -307,17 +316,17 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
         tela.blit(texto_opcoes, (20, ALTURA - 105))
 
     if trocando_banco:
-        taxa = taxa_troca_banco(jogador_atual["indice"], recurso_entregar_banco, portos)
-
         if recurso_entregar_banco is None:
             texto_banco = FONTE_TEXTO.render(
-                f"Banco {taxa}:1 - entregando {recurso_entregar_banco}. Escolha o recurso para receber.",
+                "Banco/Porto - escolha recurso para entregar: 1 Mad, 2 Tij, 3 Ove, 4 Tri, 5 Min",
                 True,
                 PRETO
             )
         else:
+            taxa = taxa_troca_banco(jogador_atual["indice"], recurso_entregar_banco, portos)
+
             texto_banco = FONTE_TEXTO.render(
-                f"Banco {taxa}:1 - entregando {recurso_entregar_banco}. Escolha o recurso para receber.",
+                f"Banco {taxa}:1 - entregando {recurso_entregar_banco}. Escolha recurso para receber.",
                 True,
                 PRETO
             )
@@ -519,14 +528,6 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
         PRETO
     )
     tela.blit(texto_controles_2, (20, ALTURA - 25))
-
-    if vencedor is not None:
-        texto_vitoria = FONTE_TITULO.render(
-            f"{vencedor['nome']} venceu o jogo!",
-            True,
-            PRETO
-        )
-        tela.blit(texto_vitoria, (LARGURA // 2 - 140, ALTURA - 80))
 
 def selecionar_ponto(pos_mouse, vertices_globais):
     mx, my = pos_mouse
@@ -1804,6 +1805,69 @@ def bot_tentar_troca_banco(jogador_atual, jogadores, portos):
 
     return None
 
+def deve_mostrar_tela_passagem(jogador_atual, proximo_jogador, jogadores):
+    return (
+        jogadores[jogador_atual]["tipo"] == "humano"
+        and jogadores[proximo_jogador]["tipo"] == "humano"
+    )
+
+def desenhar_tela_passagem_turno(tela, jogador, mensagem=""):
+    tela.fill(COR_FUNDO)
+
+    texto_1 = FONTE_TITULO.render("Passe o controle para:", True, PRETO)
+    rect_1 = texto_1.get_rect(center=(LARGURA // 2, ALTURA // 2 - 80))
+    tela.blit(texto_1, rect_1)
+
+    texto_2 = FONTE_TITULO.render(jogador["nome"], True, PRETO)
+    rect_2 = texto_2.get_rect(center=(LARGURA // 2, ALTURA // 2 - 30))
+    tela.blit(texto_2, rect_2)
+
+    if mensagem != "":
+        texto_msg = FONTE_TEXTO.render(mensagem, True, PRETO)
+        rect_msg = texto_msg.get_rect(center=(LARGURA // 2, ALTURA // 2 + 25))
+        tela.blit(texto_msg, rect_msg)
+
+    texto_3 = FONTE_TEXTO.render("Pressione ENTER para continuar", True, PRETO)
+    rect_3 = texto_3.get_rect(center=(LARGURA // 2, ALTURA // 2 + 80))
+    tela.blit(texto_3, rect_3)
+
+def deve_mostrar_tela_descarte(jogador_descartando, jogador_atual, jogadores):
+    return (
+        jogador_descartando is not None
+        and jogador_descartando != jogador_atual
+        and jogadores[jogador_descartando]["tipo"] == "humano"
+    )
+
+def desenhar_tela_vitoria(tela, vencedor, jogadores):
+    tela.fill(COR_FUNDO)
+
+    texto_titulo = FONTE_TITULO.render("Fim de jogo!", True, PRETO)
+    rect_titulo = texto_titulo.get_rect(center=(LARGURA // 2, 100))
+    tela.blit(texto_titulo, rect_titulo)
+
+    texto_vencedor = FONTE_TITULO.render(f"{vencedor['nome']} venceu!", True, PRETO)
+    rect_vencedor = texto_vencedor.get_rect(center=(LARGURA // 2, 160))
+    tela.blit(texto_vencedor, rect_vencedor)
+
+    texto_sub = FONTE_TEXTO.render("Pontuacao final:", True, PRETO)
+    rect_sub = texto_sub.get_rect(center=(LARGURA // 2, 230))
+    tela.blit(texto_sub, rect_sub)
+
+    y = 270
+    for jogador in jogadores:
+        texto_pontos = FONTE_TEXTO.render(
+            f"{jogador['nome']}: {jogador['pontos']} pontos",
+            True,
+            PRETO
+        )
+        rect_pontos = texto_pontos.get_rect(center=(LARGURA // 2, y))
+        tela.blit(texto_pontos, rect_pontos)
+        y += 35
+
+    texto_sair = FONTE_TEXTO.render("Pressione ESC para sair", True, PRETO)
+    rect_sair = texto_sair.get_rect(center=(LARGURA // 2, ALTURA - 80))
+    tela.blit(texto_sair, rect_sair)
+
 def main(game_mode="custom", num_players=2, num_humanos=2):
     relogio = pygame.time.Clock()
     tabuleiro, vertices_globais = gerar_tabuleiro()
@@ -1848,6 +1912,14 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
     usando_ano_fartura = False
     recursos_ano_fartura = []
     usando_monopolio = False
+    tela_passagem_turno = False
+    proximo_jogador_pendente = None
+    tipo_tela_passagem = None
+    mensagem_tela_passagem = ""
+    acao_pos_passagem = None
+    jogador_visivel = jogador_atual
+    bot_aguardando_resolucao_7 = False
+    historico_dados = []
 
     def iniciar_ladrao_apos_descarte():
         nonlocal escolhendo_ladrao
@@ -1880,6 +1952,36 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
             jogador_que_rolou_7 = None
 
+    def solicitar_passagem_tela(destino, tipo, mensagem, acao_depois=None):
+        nonlocal tela_passagem_turno
+        nonlocal proximo_jogador_pendente
+        nonlocal tipo_tela_passagem
+        nonlocal mensagem_tela_passagem
+        nonlocal acao_pos_passagem
+        nonlocal mensagem_jogo
+        nonlocal jogador_visivel
+
+        if destino is None:
+            return False
+
+        if jogadores[destino]["tipo"] == "bot":
+            if acao_depois == "iniciar_ladrao":
+                iniciar_ladrao_apos_descarte()
+            return False
+
+        if jogador_visivel == destino:
+            if acao_depois == "iniciar_ladrao":
+                iniciar_ladrao_apos_descarte()
+            return False
+
+        proximo_jogador_pendente = destino
+        tipo_tela_passagem = tipo
+        mensagem_tela_passagem = mensagem
+        acao_pos_passagem = acao_depois
+        tela_passagem_turno = True
+        mensagem_jogo = ""
+        return True
+
     print(f"Modo de jogo iniciado: {game_mode}")
     print(f"Jogadores criados: {[j['nome'] for j in jogadores]}")
     
@@ -1888,6 +1990,52 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
         TELA.fill(COR_FUNDO)
 
         vencedor = verificar_vencedor(jogadores)
+
+        if vencedor is not None:
+            desenhar_tela_vitoria(TELA, vencedor, jogadores)
+
+            for evento in pygame.event.get():
+                if evento.type == pygame.QUIT:
+                    rodando = False
+
+                elif evento.type == pygame.KEYDOWN:
+                    if evento.key == pygame.K_ESCAPE:
+                        rodando = False
+
+            pygame.display.flip()
+            relogio.tick(60)
+            continue
+
+        if tela_passagem_turno:
+            desenhar_tela_passagem_turno(TELA, jogadores[proximo_jogador_pendente], mensagem_tela_passagem)
+
+            for evento in pygame.event.get():
+                if evento.type == pygame.QUIT:
+                    rodando = False
+
+                elif evento.type == pygame.KEYDOWN:
+                    if evento.key == pygame.K_RETURN:
+                        if tipo_tela_passagem == "turno":
+                            jogador_atual = proximo_jogador_pendente
+                            dado_rolado_no_turno = False
+
+                        jogador_visivel = proximo_jogador_pendente
+
+                        acao_para_executar = acao_pos_passagem
+
+                        proximo_jogador_pendente = None
+                        tipo_tela_passagem = None
+                        mensagem_tela_passagem = ""
+                        acao_pos_passagem = None
+                        tela_passagem_turno = False
+                        mensagem_jogo = ""
+
+                        if acao_para_executar == "iniciar_ladrao":
+                            iniciar_ladrao_apos_descarte()
+
+            pygame.display.flip()
+            relogio.tick(60)
+            continue
 
         if fase_inicial and fase_inicial_completa(jogadores):
             distribuir_recursos_iniciais(tabuleiro, jogadores)
@@ -1898,6 +2046,17 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
         jogador = jogadores[jogador_atual]
 
         if jogador["tipo"] == "bot" and vencedor is None:
+            if bot_aguardando_resolucao_7 and not existe_acao_pendente(
+                escolhendo_ladrao,
+                escolhendo_vitima_ladrao,
+                descartando_recursos,
+                trocando_banco,
+                trocando_jogador,
+                usando_construcao_estradas,
+                usando_ano_fartura,
+                usando_monopolio
+            ):
+                bot_aguardando_resolucao_7 = False
             tempo_turno_bot += 1
 
             if tempo_turno_bot >= 60:
@@ -1929,27 +2088,61 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                         continue
 
                 else:
-                    ultimo_dado = random.randint(1, 6) + random.randint(1, 6)
-                    
-                    if ultimo_dado == 7:
-                        jogador_que_rolou_7 = jogador_atual
-                        fila_descarte = criar_fila_descarte(jogadores)
+                    if not dado_rolado_no_turno:
+                        ultimo_dado = random.randint(1, 6) + random.randint(1, 6)
+                        dado_rolado_no_turno = True
 
-                        estado_descarte = preparar_proximo_descarte(fila_descarte, jogadores)
+                        historico_dados.append(f"{jogador['nome']} tirou {ultimo_dado} no dado")
+                        historico_dados = historico_dados[-5:]
+                        
+                        if ultimo_dado == 7:
+                            jogador_que_rolou_7 = jogador_atual
+                            fila_descarte = criar_fila_descarte(jogadores)
 
-                        descartando_recursos = estado_descarte["descartando"]
-                        jogador_descartando = estado_descarte["jogador_descartando"]
-                        quantidade_descartar = estado_descarte["quantidade_para_descartar"]
-                        quantidade_descartada = estado_descarte["quantidade_descartada"]
-                        mensagem_jogo = estado_descarte["mensagem"]
+                            estado_descarte = preparar_proximo_descarte(fila_descarte, jogadores)
 
-                        if not descartando_recursos:
-                            iniciar_ladrao_apos_descarte()
-                    else:
-                        mensagem_jogo = ""
-                        distribuir_recursos(tabuleiro, ultimo_dado, jogadores, ladrao)
+                            descartando_recursos = estado_descarte["descartando"]
+                            jogador_descartando = estado_descarte["jogador_descartando"]
+                            quantidade_descartar = estado_descarte["quantidade_para_descartar"]
+                            quantidade_descartada = estado_descarte["quantidade_descartada"]
+                            mensagem_jogo = estado_descarte["mensagem"]
 
-                    print(f"{jogador['nome']} rolou o dado: {ultimo_dado}")
+                            if descartando_recursos:
+                                solicitar_passagem_tela(
+                                    jogador_descartando,
+                                    "descarte",
+                                    f"Saiu 7! {jogadores[jogador_descartando]['nome']} deve descartar recursos."
+                                )
+                            else:
+                                solicitar_passagem_tela(
+                                    jogador_que_rolou_7,
+                                    "ladrao",
+                                    f"Descarte concluido. {jogadores[jogador_que_rolou_7]['nome']} deve mover o ladrao.",
+                                    "iniciar_ladrao"
+                                )
+
+                            if descartando_recursos or tela_passagem_turno or escolhendo_ladrao or escolhendo_vitima_ladrao:
+                                tempo_turno_bot = 0
+                                continue
+
+                        else:
+                            mensagem_jogo = ""
+                            distribuir_recursos(tabuleiro, ultimo_dado, jogadores, ladrao)
+
+                        print(f"{jogador['nome']} rolou o dado: {ultimo_dado}")
+
+                    if existe_acao_pendente(
+                        escolhendo_ladrao,
+                        escolhendo_vitima_ladrao,
+                        descartando_recursos,
+                        trocando_banco,
+                        trocando_jogador,
+                        usando_construcao_estradas,
+                        usando_ano_fartura,
+                        usando_monopolio
+                    ):
+                        tempo_turno_bot = 0
+                        continue
 
                     ladrao, mensagem_carta_bot = bot_tentar_usar_carta_desenvolvimento(
                         jogador_atual,
@@ -1994,8 +2187,15 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                     indice_fase_inicial += 1
 
                     if indice_fase_inicial < len(ordem_fase_inicial):
-                        jogador_atual = ordem_fase_inicial[indice_fase_inicial]
-                        print(f"Fase inicial: agora é a vez de {jogadores[jogador_atual]['nome']}")
+                        proximo_jogador = ordem_fase_inicial[indice_fase_inicial]
+                        print(f"Fase inicial: agora é a vez de {jogadores[proximo_jogador]['nome']}")
+
+                        if deve_mostrar_tela_passagem(jogador_atual, proximo_jogador, jogadores):
+                            proximo_jogador_pendente = proximo_jogador
+                            tipo_tela_passagem = "turno"
+                            tela_passagem_turno = True
+                        else:
+                            jogador_atual = proximo_jogador
                     else:
                         print("Todos já fizeram suas jogadas iniciais.")
                 else:
@@ -2225,8 +2425,19 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                                 quantidade_descartada = estado_descarte["quantidade_descartada"]
                                 mensagem_jogo = estado_descarte["mensagem"]
 
-                                if not descartando_recursos:
-                                    iniciar_ladrao_apos_descarte()
+                                if descartando_recursos:
+                                    solicitar_passagem_tela(
+                                        jogador_descartando,
+                                        "descarte",
+                                        f"Saiu 7! {jogadores[jogador_descartando]['nome']} deve descartar recursos."
+                                    )
+                                else:
+                                    solicitar_passagem_tela(
+                                        jogador_que_rolou_7,
+                                        "ladrao",
+                                        f"Descarte concluido. {jogadores[jogador_que_rolou_7]['nome']} deve mover o ladrao.",
+                                        "iniciar_ladrao"
+                                    )
                         else:
                             mensagem_jogo = f"{jogador_descarte['nome']} nao tem {recurso} para descartar."
 
@@ -2419,6 +2630,9 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                     elif not dado_rolado_no_turno:
                         ultimo_dado = random.randint(1, 6) + random.randint(1, 6)
                         
+                        historico_dados.append(f"{jogadores[jogador_atual]['nome']} tirou {ultimo_dado} no dado")
+                        historico_dados = historico_dados[-5:]
+                        
                         if ultimo_dado == 7:
                             jogador_que_rolou_7 = jogador_atual
                             fila_descarte = criar_fila_descarte(jogadores)
@@ -2431,8 +2645,19 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                             quantidade_descartada = estado_descarte["quantidade_descartada"]
                             mensagem_jogo = estado_descarte["mensagem"]
 
-                            if not descartando_recursos:
-                                iniciar_ladrao_apos_descarte()
+                            if descartando_recursos:
+                                solicitar_passagem_tela(
+                                    jogador_descartando,
+                                    "descarte",
+                                    f"Saiu 7! {jogadores[jogador_descartando]['nome']} deve descartar recursos."
+                                )
+                            else:
+                                solicitar_passagem_tela(
+                                    jogador_que_rolou_7,
+                                    "ladrao",
+                                    f"Descarte concluido. {jogadores[jogador_que_rolou_7]['nome']} deve mover o ladrao.",
+                                    "iniciar_ladrao"
+                                )
                         else:
                             mensagem_jogo = ""
                             distribuir_recursos(tabuleiro, ultimo_dado, jogadores, ladrao)
@@ -2463,8 +2688,15 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                                 indice_fase_inicial += 1
 
                                 if indice_fase_inicial < len(ordem_fase_inicial):
-                                    jogador_atual = ordem_fase_inicial[indice_fase_inicial]
-                                    print(f"Fase inicial: agora é a vez de {jogadores[jogador_atual]['nome']}")
+                                    proximo_jogador = ordem_fase_inicial[indice_fase_inicial]
+                                    print(f"Fase inicial: agora é a vez de {jogadores[proximo_jogador]['nome']}")
+
+                                    if deve_mostrar_tela_passagem(jogador_atual, proximo_jogador, jogadores):
+                                        proximo_jogador_pendente = proximo_jogador
+                                        tipo_tela_passagem = "turno"
+                                        tela_passagem_turno = True
+                                    else:
+                                        jogador_atual = proximo_jogador
                                 else:
                                     print("Todos já fizeram suas jogadas iniciais.")
 
@@ -2474,9 +2706,17 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                             else:
                                 limpar_cartas_compradas_turno(jogadores[jogador_atual])
                                 jogadores[jogador_atual]["usou_carta_dev_turno"] = False
-                                jogador_atual = passar_turno(jogador_atual, jogadores)
-                                dado_rolado_no_turno = False
-                
+
+                                proximo_jogador = (jogador_atual + 1) % len(jogadores)
+
+                                if deve_mostrar_tela_passagem(jogador_atual, proximo_jogador, jogadores):
+                                    proximo_jogador_pendente = proximo_jogador
+                                    tipo_tela_passagem = "turno"
+                                    tela_passagem_turno = True
+                                else:
+                                    jogador_atual = passar_turno(jogador_atual, jogadores)
+                                    dado_rolado_no_turno = False
+                                                
                 elif evento.key == pygame.K_p:
                     if fase_inicial:
                         mensagem_jogo = "Nao e possivel trocar durante a fase inicial."
@@ -2661,7 +2901,8 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
             estradas_gratis_restantes,
             usando_ano_fartura,
             recursos_ano_fartura,
-            usando_monopolio
+            usando_monopolio,
+            historico_dados
         )
 
         pygame.display.flip()
