@@ -18,7 +18,7 @@ class Game():
         self.DISPLAY_W, self.DISPLAY_H = 1200, 700
         self.display = pygame.Surface((self.DISPLAY_W, self.DISPLAY_H))
         self.window = pygame.display.set_mode(((self.DISPLAY_W, self.DISPLAY_H)))
-        self.font_name = pygame.font.get_default_font()
+        self.font_name = "Segoe UI"
         self.BLACK, self.WHITE = (0,0,0), (255,255,255)
 
         self.game_mode = "custom"
@@ -41,20 +41,27 @@ class Game():
         self.main_menu = MainMenu(self)
         self.player_count_menu = PlayerCountMenu(self)
         self.human_count_menu = HumanCountMenu(self)
+        self.confirmation_menu = ConfirmationMenu(self)
         self.options = OptionsMenu(self)
         self.volume = VolumeMenu(self)
+        self.controls = ControlsMenu(self)
         self.credits = CreditsMenu(self)
         self.curr_menu = self.main_menu
 
     def game_loop(self):
-        while self.playing:
-            self.check_events()
-            if self.START_KEY:
-                self.playing = False
-            gameloop.main(self.game_mode, self.num_players, self.num_humanos)
-            self.window.blit(self.display,(0,0))
-            pygame.display.update()
-            self.reset_keys()
+        if not self.playing:
+            return
+
+        gameloop.main(
+            self.game_mode,
+            self.num_players,
+            self.num_humanos,
+            self
+        )
+
+        self.playing = False
+        self.curr_menu = self.main_menu
+        self.reset_keys()
 
     def check_events(self):
         for event in pygame.event.get():
@@ -96,11 +103,15 @@ class Game():
         self.back_sound.set_volume(self.effects_volume)
         self.back_sound.play()
 
-    def draw_text(self, text, size, x, y):
-        font = pygame.font.Font(self.font_name, size)
-        text_surface = font.render(text, True, self.WHITE)
-        text_rect = text_surface.get_rect()
-        text_rect.center = (x,y)
+    def draw_text(self, text, size, x, y, color=None, bold=False):
+        if color is None:
+            color = self.WHITE
+
+        font = pygame.font.SysFont(self.font_name, size)
+        font.set_bold(bold)
+
+        text_surface = font.render(text, True, color)
+        text_rect = text_surface.get_rect(center=(x, y))
         self.display.blit(text_surface, text_rect)
 
 if __name__ == "__main__":

@@ -465,7 +465,7 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
         y_jogs += 26
 
     texto_controles_1 = FONTE_CONTROLES.render(
-        "Turno: ESPACO rolar dados | ENTER passar turno",
+        "Turno: ESPACO rolar dados | ENTER passar turno | TAB pausar",
         True,
         PRETO
     )
@@ -1990,7 +1990,290 @@ def desenhar_banco_recursos(tela, banco_recursos):
         tela.blit(texto, (x + 15, y_recurso))
         y_recurso += 24
 
-def main(game_mode="custom", num_players=2, num_humanos=2):
+def desenhar_menu_pausa(tela, opcao_pausa):
+    overlay = pygame.Surface((LARGURA, ALTURA), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 150))
+    tela.blit(overlay, (0, 0))
+
+    largura = 420
+    altura = 360
+    x = (LARGURA - largura) // 2
+    y = (ALTURA - altura) // 2
+
+    pygame.draw.rect(
+        tela,
+        (245, 235, 220),
+        (x, y, largura, altura),
+        border_radius=15
+    )
+
+    pygame.draw.rect(
+        tela,
+        PRETO,
+        (x, y, largura, altura),
+        3,
+        border_radius=15
+    )
+
+    titulo = FONTE_TITULO.render("Jogo pausado", True, PRETO)
+    tela.blit(
+        titulo,
+        titulo.get_rect(center=(LARGURA // 2, y + 55))
+    )
+
+    opcoes = [
+        "Continuar",
+        "Volume",
+        "Controles",
+        "Voltar ao menu"
+    ]
+
+    y_opcao = y + 125
+
+    for i, opcao in enumerate(opcoes):
+        prefixo = "> " if i == opcao_pausa else ""
+        cor = (180, 100, 40) if i == opcao_pausa else PRETO
+
+        texto = FONTE_TEXTO.render(
+            f"{prefixo}{opcao}",
+            True,
+            cor
+        )
+
+        tela.blit(
+            texto,
+            texto.get_rect(center=(LARGURA // 2, y_opcao))
+        )
+
+        y_opcao += 45
+
+def desenhar_volume_pausa(tela, volume_musica, volume_efeitos, opcao_volume):
+    overlay = pygame.Surface((LARGURA, ALTURA), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 150))
+    tela.blit(overlay, (0, 0))
+
+    largura = 420
+    altura = 300
+    x = (LARGURA - largura) // 2
+    y = (ALTURA - altura) // 2
+
+    pygame.draw.rect(
+        tela,
+        (245, 235, 220),
+        (x, y, largura, altura),
+        border_radius=15
+    )
+
+    pygame.draw.rect(
+        tela,
+        PRETO,
+        (x, y, largura, altura),
+        3,
+        border_radius=15
+    )
+
+    titulo = FONTE_TITULO.render("Volume", True, PRETO)
+    tela.blit(
+        titulo,
+        titulo.get_rect(center=(LARGURA // 2, y + 50))
+    )
+
+    musica_percent = round(volume_musica * 100)
+    efeitos_percent = round(volume_efeitos * 100)
+
+    opcoes = [
+        f"Musica: {musica_percent}%",
+        f"Efeitos: {efeitos_percent}%"
+    ]
+
+    y_opcao = y + 120
+
+    for i, texto_opcao in enumerate(opcoes):
+        selecionado = i == opcao_volume
+        prefixo = "> " if selecionado else ""
+        cor = (180, 100, 40) if selecionado else PRETO
+
+        texto = FONTE_TEXTO.render(
+            f"{prefixo}{texto_opcao}",
+            True,
+            cor
+        )
+
+        tela.blit(
+            texto,
+            texto.get_rect(center=(LARGURA // 2, y_opcao))
+        )
+
+        y_opcao += 45
+
+    instrucao = FONTE_CONTROLES.render(
+        "↑ ↓ selecionar | ← → alterar | ESC voltar | TAB continuar",
+        True,
+        PRETO
+    )
+
+    tela.blit(
+        instrucao,
+        instrucao.get_rect(center=(LARGURA // 2, y + 255))
+    )
+
+
+def desenhar_controles_pausa(tela):
+    overlay = pygame.Surface((LARGURA, ALTURA), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 150))
+    tela.blit(overlay, (0, 0))
+
+    largura = 620
+    altura = 500
+    x = (LARGURA - largura) // 2
+    y = (ALTURA - altura) // 2
+
+    pygame.draw.rect(
+        tela,
+        (245, 235, 220),
+        (x, y, largura, altura),
+        border_radius=15
+    )
+
+    pygame.draw.rect(
+        tela,
+        PRETO,
+        (x, y, largura, altura),
+        3,
+        border_radius=15
+    )
+
+    titulo = FONTE_TITULO.render("Controles", True, PRETO)
+    tela.blit(
+        titulo,
+        titulo.get_rect(center=(LARGURA // 2, y + 45))
+    )
+
+    linhas = [
+        "ESPACO - rolar dados",
+        "ENTER - passar turno",
+        "C - construir cidade",
+        "D - comprar desenvolvimento",
+        "B - trocar com banco ou porto",
+        "P - propor troca com jogador",
+        "K - usar Cavaleiro",
+        "R - usar Construcao de Estradas",
+        "F - usar Ano de Fartura",
+        "M - usar Monopolio",
+        "TAB - pausar a partida",
+        "Mouse - construir e mover o ladrao"
+    ]
+
+    y_linha = y + 90
+
+    for linha in linhas:
+        texto = FONTE_CONTROLES.render(linha, True, PRETO)
+        tela.blit(
+            texto,
+            texto.get_rect(center=(LARGURA // 2, y_linha))
+        )
+        y_linha += 29
+
+    instrucao = FONTE_CONTROLES.render(
+        "ESC voltar | TAB continuar",
+        True,
+        PRETO
+    )
+
+    tela.blit(
+        instrucao,
+        instrucao.get_rect(center=(LARGURA // 2, y + altura - 35))
+    )
+    
+
+def desenhar_confirmacao_voltar_menu(tela, opcao_confirmar):
+    overlay = pygame.Surface((LARGURA, ALTURA), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 150))
+    tela.blit(overlay, (0, 0))
+
+    largura = 500
+    altura = 300
+    x = (LARGURA - largura) // 2
+    y = (ALTURA - altura) // 2
+
+    pygame.draw.rect(
+        tela,
+        (245, 235, 220),
+        (x, y, largura, altura),
+        border_radius=15
+    )
+
+    pygame.draw.rect(
+        tela,
+        PRETO,
+        (x, y, largura, altura),
+        3,
+        border_radius=15
+    )
+
+    titulo = FONTE_TITULO.render(
+        "Voltar ao menu?",
+        True,
+        PRETO
+    )
+    tela.blit(
+        titulo,
+        titulo.get_rect(center=(LARGURA // 2, y + 55))
+    )
+
+    aviso = FONTE_TEXTO.render(
+        "A partida atual sera encerrada.",
+        True,
+        PRETO
+    )
+    tela.blit(
+        aviso,
+        aviso.get_rect(center=(LARGURA // 2, y + 105))
+    )
+
+    opcoes = [
+        "Nao, continuar partida",
+        "Sim, voltar ao menu"
+    ]
+
+    y_opcao = y + 165
+
+    for i, opcao in enumerate(opcoes):
+        selecionado = i == opcao_confirmar
+        prefixo = "> " if selecionado else ""
+        cor = (180, 100, 40) if selecionado else PRETO
+
+        texto = FONTE_TEXTO.render(
+            f"{prefixo}{opcao}",
+            True,
+            cor
+        )
+
+        tela.blit(
+            texto,
+            texto.get_rect(center=(LARGURA // 2, y_opcao))
+        )
+
+        y_opcao += 45
+
+    instrucao = FONTE_CONTROLES.render(
+        "↑ ↓ selecionar | ENTER confirmar | ESC voltar",
+        True,
+        PRETO
+    )
+
+    tela.blit(
+        instrucao,
+        instrucao.get_rect(center=(LARGURA // 2, y + altura - 25))
+    )
+
+def main(game_mode="custom", num_players=2, num_humanos=2, game=None):
+    aldeias_construidas.clear()
+    estradas_construidas.clear()
+
+    random.shuffle(TERRENOS)
+    random.shuffle(FICHAS)
+
     relogio = pygame.time.Clock()
     tabuleiro, vertices_globais = gerar_tabuleiro()
     baralho_desenvolvimento = criar_baralho_desenvolvimento()
@@ -2009,6 +2292,12 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
     ultimo_dado = 0
     mensagem_jogo = ""
     vertice_selecionado = None
+    jogo_pausado = False
+    opcao_pausa = 0
+    tela_pausa_atual = "menu"
+    voltar_ao_menu = False
+    opcao_confirmar_saida = 0
+    opcao_volume_pausa = 0
     jogadores = criar_jogadores(num_players, num_humanos)
     jogador_atual = 0
     tempo_turno_bot = 0
@@ -2043,6 +2332,15 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
     bot_aguardando_resolucao_7 = False
     historico_dados = []
     banco_recursos = criar_banco_recursos()
+
+    def encerrar_janela():
+        nonlocal rodando
+
+        rodando = False
+
+        if game is not None:
+            game.running = False
+            game.playing = False
 
     def iniciar_ladrao_apos_descarte():
         nonlocal escolhendo_ladrao
@@ -2116,10 +2414,10 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
         if vencedor is not None:
             desenhar_tela_vitoria(TELA, vencedor, jogadores)
-
+    
             for evento in pygame.event.get():
                 if evento.type == pygame.QUIT:
-                    rodando = False
+                    encerrar_janela()
 
                 elif evento.type == pygame.KEYDOWN:
                     if evento.key == pygame.K_ESCAPE:
@@ -2134,7 +2432,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
             for evento in pygame.event.get():
                 if evento.type == pygame.QUIT:
-                    rodando = False
+                    encerrar_janela()
 
                 elif evento.type == pygame.KEYDOWN:
                     if evento.key == pygame.K_RETURN:
@@ -2155,6 +2453,115 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
                         if acao_para_executar == "iniciar_ladrao":
                             iniciar_ladrao_apos_descarte()
+
+            pygame.display.flip()
+            relogio.tick(60)
+            continue
+
+        if jogo_pausado:
+            if tela_pausa_atual == "menu":
+                desenhar_menu_pausa(TELA, opcao_pausa)
+
+            elif tela_pausa_atual == "volume":
+                desenhar_volume_pausa(
+                    TELA,
+                    game.music_volume,
+                    game.effects_volume,
+                    opcao_volume_pausa
+                )
+
+            elif tela_pausa_atual == "controles":
+                desenhar_controles_pausa(TELA)
+            
+            elif tela_pausa_atual == "confirmar_saida":
+                desenhar_confirmacao_voltar_menu(
+                    TELA,
+                    opcao_confirmar_saida
+                )
+            for evento in pygame.event.get():
+                if evento.type == pygame.QUIT:
+                    encerrar_janela()
+
+                elif evento.type == pygame.KEYDOWN:
+                    if evento.key == pygame.K_TAB:
+                        jogo_pausado = False
+                        tela_pausa_atual = "menu"
+
+                    elif tela_pausa_atual == "menu":
+                        if evento.key == pygame.K_UP:
+                            opcao_pausa = (opcao_pausa - 1) % 4
+
+                        elif evento.key == pygame.K_DOWN:
+                            opcao_pausa = (opcao_pausa + 1) % 4
+
+                        elif evento.key == pygame.K_RETURN:
+                            if opcao_pausa == 0:
+                                jogo_pausado = False
+
+                            elif opcao_pausa == 1:
+                                tela_pausa_atual = "volume"
+                                opcao_volume_pausa = 0
+
+                            elif opcao_pausa == 2:
+                                tela_pausa_atual = "controles"
+
+                            elif opcao_pausa == 3:
+                                tela_pausa_atual = "confirmar_saida"
+                                opcao_confirmar_saida = 0
+
+                    elif tela_pausa_atual == "volume":
+                        if evento.key == pygame.K_ESCAPE:
+                            tela_pausa_atual = "menu"
+
+                        elif evento.key == pygame.K_UP or evento.key == pygame.K_DOWN:
+                            opcao_volume_pausa = 1 - opcao_volume_pausa
+
+                        elif evento.key == pygame.K_LEFT:
+                            if opcao_volume_pausa == 0:
+                                game.music_volume = max(
+                                    0,
+                                    round(game.music_volume - 0.01, 2)
+                                )
+                                pygame.mixer.music.set_volume(game.music_volume)
+
+                            else:
+                                game.effects_volume = max(
+                                    0,
+                                    round(game.effects_volume - 0.01, 2)
+                                )
+
+                        elif evento.key == pygame.K_RIGHT:
+                            if opcao_volume_pausa == 0:
+                                game.music_volume = min(
+                                    1,
+                                    round(game.music_volume + 0.01, 2)
+                                )
+                                pygame.mixer.music.set_volume(game.music_volume)
+
+                            else:
+                                game.effects_volume = min(
+                                    1,
+                                    round(game.effects_volume + 0.01, 2)
+                                )
+
+                    elif tela_pausa_atual == "controles":
+                        if evento.key == pygame.K_ESCAPE:
+                            tela_pausa_atual = "menu"
+                            
+                    elif tela_pausa_atual == "confirmar_saida":
+                        if evento.key == pygame.K_ESCAPE:
+                            tela_pausa_atual = "menu"
+
+                        elif evento.key == pygame.K_UP or evento.key == pygame.K_DOWN:
+                            opcao_confirmar_saida = 1 - opcao_confirmar_saida
+
+                        elif evento.key == pygame.K_RETURN:
+                            if opcao_confirmar_saida == 0:
+                                tela_pausa_atual = "menu"
+
+                            else:
+                                voltar_ao_menu = True
+                                rodando = False
 
             pygame.display.flip()
             relogio.tick(60)
@@ -2336,7 +2743,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
-                rodando = False
+                encerrar_janela()
 
             elif vencedor is not None:
                 continue
@@ -2426,7 +2833,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                                 vertice_selecionado = None
 
                             if not fase_inicial and not dado_rolado_no_turno:
-                                print("Você precisa rolar o dado antes de construir.")
+                                mensagem_jogo = "Você precisa rolar o dado antes de construir."
                             else:
                                 tentar_construir_aldeia(
                                     vertice_selecionado,
@@ -2458,7 +2865,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                                         limite_inicial = limite_fase_inicial_atual(indice_fase_inicial, jogadores)
 
                                     if not fase_inicial and not dado_rolado_no_turno:
-                                        print("Você precisa rolar o dado antes de construir.")
+                                        mensagem_jogo = "Você precisa rolar o dado antes de construir."
                                     else:
                                         if usando_construcao_estradas:
                                             construiu = tentar_construir_estrada(
@@ -2483,7 +2890,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
                                         else:
                                             if not fase_inicial and not dado_rolado_no_turno:
-                                                print("Você precisa rolar o dado antes de construir.")
+                                                mensagem_jogo = "Você precisa rolar o dado antes de construir."
                                             else:
                                                 tentar_construir_estrada(
                                                     vertice_selecionado,
@@ -2503,6 +2910,12 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                                 vertice_selecionado = None
                     
             elif evento.type == pygame.KEYDOWN:
+                if evento.key == pygame.K_TAB:
+                    jogo_pausado = True
+                    opcao_pausa = 0
+                    tela_pausa_atual = "menu"
+                    continue
+
                 if escolhendo_vitima_ladrao:
                     if pygame.K_1 <= evento.key <= pygame.K_9:
                         escolha = evento.key - pygame.K_1
@@ -2846,7 +3259,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
                         else:
                             if not dado_rolado_no_turno:
-                                print("Você precisa rolar o dado antes de passar o turno.")
+                                mensagem_jogo =  "Você precisa rolar o dado antes de passar o turno."
                             else:
                                 limpar_cartas_compradas_turno(jogadores[jogador_atual])
                                 jogadores[jogador_atual]["usou_carta_dev_turno"] = False
@@ -3004,7 +3417,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
                     elif vertice_selecionado is not None:
                         if not dado_rolado_no_turno:
-                            print("Você precisa rolar o dado antes de construir.")
+                            mensagem_jogo = "Você precisa rolar o dado antes de construir."
                         else:
                             tentar_construir_cidade(vertice_selecionado, jogador_atual, jogadores, banco_recursos)
 
@@ -3056,8 +3469,8 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
         pygame.display.flip()
         relogio.tick(60)
 
-    pygame.quit()
-    sys.exit()
+    return voltar_ao_menu
 
 if __name__ == "__main__":
     main()
+    pygame.quit()

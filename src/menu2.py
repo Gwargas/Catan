@@ -3,7 +3,7 @@ import pygame
 class Menu():
     def __init__(self, game):
         self.game = game
-        
+
         # Carrega a imagem original do fundo
         imagem_original = pygame.image.load("assets/CATTAN menu inicial.png").convert()
         self.background = pygame.transform.scale(imagem_original, (self.game.DISPLAY_W, self.game.DISPLAY_H))
@@ -11,9 +11,15 @@ class Menu():
         self.mid_w, self.mid_h = self.game.DISPLAY_W / 2 , self.game.DISPLAY_H / 2
         self.run_display = True
         self.cursor_rect = pygame.Rect(0,0,20,20)
-        self.offset = -150 
         
         self.DARK_PURPLE = (48, 25, 52) 
+        self.TEXT_COLOR = (48, 25, 52)
+        self.TITLE_COLOR = (35, 15, 40)
+        self.CURSOR_COLOR = (255, 190, 40)
+        self.PANEL_COLOR = (245, 235, 220, 225)
+        self.PANEL_BORDER = (48, 25, 52)
+
+        self.offset = -125
 
         # --- Lógica do Gato Animado ---
         # Carrega os frames (1, 2 e 3 conforme os arquivos na pasta assets)
@@ -37,7 +43,33 @@ class Menu():
         self.cat_facing_right = True
 
     def draw_bottom_bar(self):
-        pygame.draw.rect(self.game.display, self.DARK_PURPLE, (0, self.game.DISPLAY_H - 20, self.game.DISPLAY_W, 60))
+        pygame.draw.rect(self.game.display, self.DARK_PURPLE, (0, self.game.DISPLAY_H - 60, self.game.DISPLAY_W, 60))
+
+    def draw_menu_instructions(self, texto):
+        self.game.draw_text(
+            texto,
+            16,
+            self.game.DISPLAY_W // 2,
+            self.game.DISPLAY_H - 30,
+            self.game.WHITE
+        )
+
+    def draw_menu_panel(self, largura=420, altura=320, y_offset=40):
+        painel = pygame.Surface((largura, altura), pygame.SRCALPHA)
+        painel.fill(self.PANEL_COLOR)
+
+        x = int(self.mid_w - largura / 2)
+        y = int(self.mid_h - altura / 2 + y_offset)
+
+        self.game.display.blit(painel, (x, y))
+
+        pygame.draw.rect(
+            self.game.display,
+            self.PANEL_BORDER,
+            (x, y, largura, altura),
+            3,
+            border_radius=12
+        )
 
     def update_cat(self):
         # 1. Movimentação
@@ -65,7 +97,32 @@ class Menu():
         self.game.display.blit(current_frame, (self.cat_x, self.cat_y))
 
     def draw_cursor(self):
-        self.game.draw_text("*", 15, self.cursor_rect.x, self.cursor_rect.y)
+        x = int(self.cursor_rect.centerx)
+        y = int(self.cursor_rect.top)
+
+        pontos = [
+            (x - 10, y - 8),
+            (x - 10, y + 8),
+            (x + 4, y)
+        ]
+
+        pygame.draw.polygon(
+            self.game.display,
+            self.PANEL_BORDER,
+            pontos
+        )
+
+        pontos_internos = [
+            (x - 7, y - 5),
+            (x - 7, y + 5),
+            (x + 1, y)
+        ]
+
+        pygame.draw.polygon(
+            self.game.display,
+            self.CURSOR_COLOR,
+            pontos_internos
+        )
 
     def play_cursor_sound(self):
         self.game.play_cursor_sound()
@@ -81,99 +138,169 @@ class Menu():
 
 class MainMenu(Menu):
     def __init__(self, game):
-        Menu.__init__(self,game)
-        self.state = "Multiplayer"
+        Menu.__init__(self, game)
 
-        self.multiplayerx, self.multiplayery = self.mid_w, self.mid_h + 30
-        self.botx, self.boty = self.mid_w, self.mid_h + 90
-        self.optionsx, self.optionsy = self.mid_w, self.mid_h + 150
-        self.creditsx, self.creditsy = self.mid_w, self.mid_h + 210
-        self.cursor_rect.midtop = (self.multiplayerx + self.offset, self.multiplayery)
-        
+        self.state = "Start"
+
+        self.start_x, self.start_y = self.mid_w, self.mid_h + 30
+        self.options_x, self.options_y = self.mid_w, self.mid_h + 90
+        self.credits_x, self.credits_y = self.mid_w, self.mid_h + 150
+        self.exit_x, self.exit_y = self.mid_w, self.mid_h + 210
+
+        self.cursor_rect.midtop = (
+            self.start_x + self.offset,
+            self.start_y
+        )
+
         btn_w, btn_h = 150, 55
 
-        self.title_image = pygame.image.load("assets/Menu-principal.png").convert_alpha()
-        self.title_image = pygame.transform.smoothscale(self.title_image, (250, 75))
-        self.title_rect = self.title_image.get_rect(center=(self.mid_w, self.mid_h - 100))
+        self.title_image = pygame.image.load(
+            "assets/Menu-principal.png"
+        ).convert_alpha()
+        self.title_image = pygame.transform.smoothscale(
+            self.title_image,
+            (250, 75)
+        )
+        self.title_rect = self.title_image.get_rect(
+            center=(self.mid_w, self.mid_h - 100)
+        )
 
-        self.start_img = pygame.image.load("assets/Iniciar-jogo.png").convert_alpha()
-        self.start_img = pygame.transform.smoothscale(self.start_img, (btn_w, btn_h))
-        self.start_img_rect = self.start_img.get_rect(center=(self.multiplayerx, self.multiplayery))
+        self.start_img = pygame.image.load(
+            "assets/Iniciar-jogo.png"
+        ).convert_alpha()
+        self.start_img = pygame.transform.smoothscale(
+            self.start_img,
+            (btn_w, btn_h)
+        )
+        self.start_img_rect = self.start_img.get_rect(
+            center=(self.start_x, self.start_y)
+        )
 
-        self.options_img = pygame.image.load("assets/configurações.png").convert_alpha()
-        self.options_img = pygame.transform.smoothscale(self.options_img, (btn_w, btn_h))
-        self.options_img_rect = self.options_img.get_rect(center=(self.optionsx, self.optionsy))
+        self.options_img = pygame.image.load(
+            "assets/configurações.png"
+        ).convert_alpha()
+        self.options_img = pygame.transform.smoothscale(
+            self.options_img,
+            (btn_w, btn_h)
+        )
+        self.options_img_rect = self.options_img.get_rect(
+            center=(self.options_x, self.options_y)
+        )
 
-        self.credits_img = pygame.image.load("assets/Creditos.png").convert_alpha()
-        self.credits_img = pygame.transform.smoothscale(self.credits_img, (btn_w, btn_h))
-        self.credits_img_rect = self.credits_img.get_rect(center=(self.creditsx, self.creditsy))
+        self.credits_img = pygame.image.load(
+            "assets/Creditos.png"
+        ).convert_alpha()
+        self.credits_img = pygame.transform.smoothscale(
+            self.credits_img,
+            (btn_w, btn_h)
+        )
+        self.credits_img_rect = self.credits_img.get_rect(
+            center=(self.credits_x, self.credits_y)
+        )
+
+        self.exit_img = pygame.image.load(
+            "assets/Sair.png"
+        ).convert_alpha()
+        self.exit_img = pygame.transform.smoothscale(
+            self.exit_img,
+            (btn_w, btn_h)
+        )
+        self.exit_img_rect = self.exit_img.get_rect(
+            center=(self.exit_x, self.exit_y)
+        )
 
     def display_menu(self):
         self.run_display = True
+
         while self.run_display:
             self.game.check_events()
             self.check_input()
-            
+
             self.game.display.blit(self.background, (0, 0))
             self.game.display.blit(self.title_image, self.title_rect)
-            
+
             self.game.display.blit(self.start_img, self.start_img_rect)
-            self.game.draw_text("Contra Máquina", 24, self.botx, self.boty)
             self.game.display.blit(self.options_img, self.options_img_rect)
             self.game.display.blit(self.credits_img, self.credits_img_rect)
-            
-            # Ordem importante: Barra primeiro, Gato depois
+            self.game.display.blit(self.exit_img, self.exit_img_rect)
+
             self.draw_bottom_bar()
+            self.draw_menu_instructions(
+                "↑ ↓ navegar | ENTER confirmar"
+            )
             self.update_cat()
-            
             self.draw_cursor()
             self.blit_screen()
 
     def move_cursor(self):
         if self.game.DOWN_KEY:
             self.game.play_cursor_sound()
-            if self.state == 'Multiplayer':
-                self.cursor_rect.midtop = (self.botx + self.offset, self.boty)
-                self.state = 'Bot'
-            elif self.state == 'Bot':
-                self.cursor_rect.midtop = (self.optionsx + self.offset, self.optionsy)
-                self.state = 'Options'
-            elif self.state == 'Options':
-                self.cursor_rect.midtop = (self.creditsx + self.offset, self.creditsy)
-                self.state = 'Credits'
-            elif self.state == 'Credits':
-                self.cursor_rect.midtop = (self.multiplayerx + self.offset, self.multiplayery)
-                self.state = 'Multiplayer'
+
+            if self.state == "Start":
+                self.state = "Options"
+                posicao = (self.options_x, self.options_y)
+
+            elif self.state == "Options":
+                self.state = "Credits"
+                posicao = (self.credits_x, self.credits_y)
+
+            elif self.state == "Credits":
+                self.state = "Exit"
+                posicao = (self.exit_x, self.exit_y)
+
+            else:
+                self.state = "Start"
+                posicao = (self.start_x, self.start_y)
+
+            self.cursor_rect.midtop = (
+                posicao[0] + self.offset,
+                posicao[1]
+            )
 
         elif self.game.UP_KEY:
             self.game.play_cursor_sound()
-            if self.state == 'Multiplayer':
-                self.cursor_rect.midtop = (self.creditsx + self.offset, self.creditsy)
-                self.state = 'Credits'
-            elif self.state == 'Bot':
-                self.cursor_rect.midtop = (self.multiplayerx + self.offset, self.multiplayery)
-                self.state = 'Multiplayer'
-            elif self.state == 'Options':
-                self.cursor_rect.midtop = (self.botx + self.offset, self.boty)
-                self.state = 'Bot'
-            elif self.state == 'Credits':
-                self.cursor_rect.midtop = (self.optionsx + self.offset, self.optionsy)
-                self.state = 'Options'
+
+            if self.state == "Start":
+                self.state = "Exit"
+                posicao = (self.exit_x, self.exit_y)
+
+            elif self.state == "Options":
+                self.state = "Start"
+                posicao = (self.start_x, self.start_y)
+
+            elif self.state == "Credits":
+                self.state = "Options"
+                posicao = (self.options_x, self.options_y)
+
+            else:
+                self.state = "Credits"
+                posicao = (self.credits_x, self.credits_y)
+
+            self.cursor_rect.midtop = (
+                posicao[0] + self.offset,
+                posicao[1]
+            )
 
     def check_input(self):
         self.move_cursor()
+
         if self.game.START_KEY:
             self.game.play_confirm_sound()
-            if self.state == 'Multiplayer':
+
+            if self.state == "Start":
                 self.game.game_mode = "custom"
                 self.game.curr_menu = self.game.player_count_menu
-            elif self.state == 'Bot':
-                self.game.game_mode = "bot"
-                self.game.playing = True
-            elif self.state == 'Options':
+
+            elif self.state == "Options":
                 self.game.curr_menu = self.game.options
-            elif self.state == 'Credits':
+
+            elif self.state == "Credits":
                 self.game.curr_menu = self.game.credits
+
+            elif self.state == "Exit":
+                self.game.running = False
+                self.game.playing = False
+
             self.run_display = False
 
 class PlayerCountMenu(Menu):
@@ -195,13 +322,50 @@ class PlayerCountMenu(Menu):
             self.check_input()
 
             self.game.display.blit(self.background, (0, 0))
-            self.game.draw_text("Quantidade de participantes", 22, self.mid_w, self.mid_h - 40)
 
-            self.game.draw_text("2 jogadores", 18, self.two_x, self.two_y)
-            self.game.draw_text("3 jogadores", 18, self.three_x, self.three_y)
-            self.game.draw_text("4 jogadores", 18, self.four_x, self.four_y)
+            self.draw_menu_panel(
+                largura=470,
+                altura=300,
+                y_offset=25
+            )
+
+            self.game.draw_text(
+                "Quantidade de participantes",
+                24,
+                self.mid_w,
+                self.mid_h - 55,
+                self.TITLE_COLOR,
+                bold=True
+            )
+
+            self.game.draw_text(
+                "2 jogadores",
+                20,
+                self.two_x,
+                self.two_y,
+                self.TEXT_COLOR
+            )
+
+            self.game.draw_text(
+                "3 jogadores",
+                20,
+                self.three_x,
+                self.three_y,
+                self.TEXT_COLOR
+            )
+
+            self.game.draw_text(
+                "4 jogadores",
+                20,
+                self.four_x,
+                self.four_y,
+                self.TEXT_COLOR
+            )
 
             self.draw_bottom_bar()
+            self.draw_menu_instructions(
+                "↑ ↓ escolher | ENTER confirmar | ESC voltar"
+            )
             self.update_cat()
             self.draw_cursor()
             self.blit_screen()
@@ -260,20 +424,49 @@ class HumanCountMenu(Menu):
             self.check_input()
 
             self.game.display.blit(self.background, (0, 0))
-            self.game.draw_text("Quantidade de jogadores humanos", 21, self.mid_w, self.mid_h - 60)
+
+            self.draw_menu_panel(
+                largura=500,
+                altura=340,
+                y_offset=25
+            )
+
+            self.game.draw_text(
+                "Quantidade de jogadores humanos",
+                24,
+                self.mid_w,
+                self.mid_h - 75,
+                self.TITLE_COLOR,
+                bold=True
+            )
 
             self.option_positions = []
 
             for i in range(1, self.game.num_players + 1):
                 x = self.mid_w
-                y = self.mid_h - 10 + (i - 1) * 40
+                y = self.mid_h - 15 + (i - 1) * 42
+
                 self.option_positions.append((x, y))
-                self.game.draw_text(f"{i} humano(s)", 18, x, y)
+
+                self.game.draw_text(
+                    f"{i} humano(s)",
+                    20,
+                    x,
+                    y,
+                    self.TEXT_COLOR
+                )
 
             cursor_x, cursor_y = self.option_positions[self.state - 1]
-            self.cursor_rect.midtop = (cursor_x + self.offset, cursor_y)
+
+            self.cursor_rect.midtop = (
+                cursor_x + self.offset,
+                cursor_y
+            )
 
             self.draw_bottom_bar()
+            self.draw_menu_instructions(
+                "↑ ↓ escolher | ENTER confirmar | ESC voltar"
+            )
             self.update_cat()
             self.draw_cursor()
             self.blit_screen()
@@ -299,9 +492,136 @@ class HumanCountMenu(Menu):
         elif self.game.START_KEY:
             self.game.play_confirm_sound()
             self.game.num_humanos = self.state
-            self.game.playing = True
+            self.game.curr_menu = self.game.confirmation_menu
             self.run_display = False
-            
+
+class ConfirmationMenu(Menu):
+    def __init__(self, game):
+        Menu.__init__(self, game)
+
+        self.state = "Start"
+
+        self.start_x, self.start_y = self.mid_w, self.mid_h + 140
+        self.back_x, self.back_y = self.mid_w, self.mid_h + 185
+
+        self.cursor_rect.midtop = (
+            self.start_x + self.offset,
+            self.start_y
+        )
+
+    def display_menu(self):
+        self.run_display = True
+        self.state = "Start"
+
+        while self.run_display:
+            self.game.check_events()
+            self.check_input()
+
+            self.game.display.blit(self.background, (0, 0))
+
+            self.draw_menu_panel(
+                largura=500,
+                altura=420,
+                y_offset=30
+            )
+
+            quantidade_bots = (
+                self.game.num_players - self.game.num_humanos
+            )
+
+            self.game.draw_text(
+                "Confirmar partida",
+                28,
+                self.mid_w,
+                self.mid_h - 130,
+                self.TITLE_COLOR,
+                bold=True
+            )
+
+            self.game.draw_text(
+                f"Jogadores totais: {self.game.num_players}",
+                21,
+                self.mid_w,
+                self.mid_h - 65,
+                self.TEXT_COLOR
+            )
+
+            self.game.draw_text(
+                f"Humanos: {self.game.num_humanos}",
+                21,
+                self.mid_w,
+                self.mid_h - 25,
+                self.TEXT_COLOR
+            )
+
+            self.game.draw_text(
+                f"Bots: {quantidade_bots}",
+                21,
+                self.mid_w,
+                self.mid_h + 15,
+                self.TEXT_COLOR
+            )
+
+            self.game.draw_text(
+                "Iniciar partida",
+                21,
+                self.start_x,
+                self.start_y,
+                self.TEXT_COLOR,
+                bold=True
+            )
+
+            self.game.draw_text(
+                "Voltar",
+                21,
+                self.back_x,
+                self.back_y,
+                self.TEXT_COLOR
+            )
+
+            if self.state == "Start":
+                posicao = (self.start_x, self.start_y)
+            else:
+                posicao = (self.back_x, self.back_y)
+
+            self.cursor_rect.midtop = (
+                posicao[0] + self.offset,
+                posicao[1]
+            )
+
+            self.draw_bottom_bar()
+            self.draw_menu_instructions(
+                "↑ ↓ escolher | ENTER confirmar | ESC voltar"
+            )
+            self.update_cat()
+            self.draw_cursor()
+            self.blit_screen()
+
+    def check_input(self):
+        if self.game.BACK_KEY:
+            self.game.play_back_sound()
+            self.game.curr_menu = self.game.human_count_menu
+            self.run_display = False
+
+        elif self.game.UP_KEY or self.game.DOWN_KEY:
+            self.game.play_cursor_sound()
+
+            if self.state == "Start":
+                self.state = "Back"
+            else:
+                self.state = "Start"
+
+        elif self.game.START_KEY:
+            self.game.play_confirm_sound()
+
+            if self.state == "Start":
+                self.game.playing = True
+
+            else:
+                self.game.curr_menu = self.game.human_count_menu
+
+            self.run_display = False
+
 class OptionsMenu(Menu):
     def __init__(self, game):
         Menu.__init__(self, game)
@@ -312,17 +632,49 @@ class OptionsMenu(Menu):
 
     def display_menu(self):
         self.run_display = True
+
         while self.run_display:
             self.game.check_events()
             self.check_input()
+
             self.game.display.blit(self.background, (0, 0))
-            self.game.draw_text("Opcoes", 20, self.game.DISPLAY_W /2, self.game.DISPLAY_H /2 - 30)
-            self.game.draw_text("Volume", 15, self.volx, self.voly)
-            self.game.draw_text("Controles", 15, self.controlsx, self.controlsy)
-            
+
+            self.draw_menu_panel(
+                largura=420,
+                altura=280,
+                y_offset=20
+            )
+
+            self.game.draw_text(
+                "Opcoes",
+                28,
+                self.mid_w,
+                self.mid_h - 70,
+                self.TITLE_COLOR,
+                bold=True
+            )
+
+            self.game.draw_text(
+                "Volume",
+                21,
+                self.volx,
+                self.voly,
+                self.TEXT_COLOR
+            )
+
+            self.game.draw_text(
+                "Controles",
+                21,
+                self.controlsx,
+                self.controlsy,
+                self.TEXT_COLOR
+            )
+
             self.draw_bottom_bar()
+            self.draw_menu_instructions(
+                "↑ ↓ navegar | ENTER confirmar | ESC voltar"
+            )
             self.update_cat()
-            
             self.draw_cursor()
             self.blit_screen()
     
@@ -344,7 +696,7 @@ class OptionsMenu(Menu):
             if self.state == 'Volume':
                 self.game.curr_menu = self.game.volume
             elif self.state == 'Controls':
-                pass
+                self.game.curr_menu = self.game.controls
             self.run_display = False
         
 
@@ -358,23 +710,52 @@ class VolumeMenu(Menu):
 
     def display_menu(self):
         self.run_display = True
+
         while self.run_display:
             self.game.check_events()
             self.check_input()
+
             self.game.display.blit(self.background, (0, 0))
+
+            self.draw_menu_panel(
+                largura=500,
+                altura=260,
+                y_offset=20
+            )
 
             music_percent = round(self.game.music_volume * 100)
             effects_percent = round(self.game.effects_volume * 100)
 
-            self.game.draw_text("Volume", 20, self.game.DISPLAY_W / 2, self.game.DISPLAY_H / 2 - 40)
-            self.game.draw_text(f"Música: {music_percent}%", 15, self.musicx, self.musicy)
-            self.game.draw_text(f"Efeitos: {effects_percent}%", 15, self.effectsx, self.effectsy)
-            self.game.draw_text("Use as setas para alterar", 12, self.game.DISPLAY_W / 2, self.game.DISPLAY_H / 2 + 100)
-            self.game.draw_text("ESC para voltar", 12, self.game.DISPLAY_W / 2, self.game.DISPLAY_H / 2 + 120)
+            self.game.draw_text(
+                "Volume",
+                28,
+                self.mid_w,
+                self.mid_h - 90,
+                self.TITLE_COLOR,
+                bold=True
+            )
+
+            self.game.draw_text(
+                f"Musica: {music_percent}%",
+                21,
+                self.musicx,
+                self.musicy,
+                self.TEXT_COLOR
+            )
+
+            self.game.draw_text(
+                f"Efeitos: {effects_percent}%",
+                21,
+                self.effectsx,
+                self.effectsy,
+                self.TEXT_COLOR
+            )
 
             self.draw_bottom_bar()
+            self.draw_menu_instructions(
+                "↑ ↓ selecionar | ← → alterar | ESC voltar"
+            )
             self.update_cat()
-            
             self.draw_cursor()
             self.blit_screen()
 
@@ -404,6 +785,71 @@ class VolumeMenu(Menu):
             elif self.state == 'Effects':
                 self.game.effects_volume = min(1, round(self.game.effects_volume + 0.01, 2))
 
+class ControlsMenu(Menu):
+    def __init__(self, game):
+        Menu.__init__(self, game)
+
+    def display_menu(self):
+        self.run_display = True
+
+        while self.run_display:
+            self.game.check_events()
+
+            if self.game.START_KEY or self.game.BACK_KEY:
+                self.game.play_back_sound()
+                self.game.curr_menu = self.game.options
+                self.run_display = False
+
+            self.game.display.blit(self.background, (0, 0))
+
+            self.draw_menu_panel(
+                largura=700,
+                altura=500,
+                y_offset=10
+            )
+
+            self.game.draw_text(
+                "Controles",
+                30,
+                self.mid_w,
+                self.mid_h - 205,
+                self.TITLE_COLOR,
+                bold=True
+            )
+
+            linhas = [
+                "ESPACO - rolar os dados",
+                "ENTER - passar o turno",
+                "TAB - pausar a partida",
+                "C - construir cidade",
+                "D - comprar carta de desenvolvimento",
+                "B - trocar com banco ou porto",
+                "P - propor troca com outro jogador",
+                "K - usar Cavaleiro",
+                "R - usar Construcao de Estradas",
+                "F - usar Ano de Fartura",
+                "M - usar Monopolio",
+                "Mouse - construir aldeias, estradas e mover o ladrao"
+            ]
+
+            y = self.mid_h - 145
+
+            for linha in linhas:
+                self.game.draw_text(
+                    linha,
+                    19,
+                    self.mid_w,
+                    y,
+                    self.TEXT_COLOR
+                )
+                y += 32
+
+            self.draw_bottom_bar()
+            self.draw_menu_instructions(
+                "ENTER ou ESC voltar"
+            )
+            self.update_cat()
+            self.blit_screen()
 
 class CreditsMenu(Menu):
     def __init__(self, game):
@@ -411,18 +857,43 @@ class CreditsMenu(Menu):
 
     def display_menu(self):
         self.run_display = True
+
         while self.run_display:
             self.game.check_events()
+
             if self.game.START_KEY or self.game.BACK_KEY:
                 self.game.play_back_sound()
                 self.game.curr_menu = self.game.main_menu
                 self.run_display = False
-                
+
             self.game.display.blit(self.background, (0, 0))
-            self.game.draw_text('Creditos', 20, self.game.DISPLAY_W/2, self.game.DISPLAY_H /2 - 20)
-            self.game.draw_text('Autoria de Gatos Pingados', 15, self.game.DISPLAY_W/2, self.game.DISPLAY_H/2 + 10)
-            
+
+            self.draw_menu_panel(
+                largura=520,
+                altura=300,
+                y_offset=20
+            )
+
+            self.game.draw_text(
+                "Creditos",
+                28,
+                self.mid_w,
+                self.mid_h - 75,
+                self.TITLE_COLOR,
+                bold=True
+            )
+
+            self.game.draw_text(
+                "Autoria de Gatos Pingados",
+                21,
+                self.mid_w,
+                self.mid_h - 10,
+                self.TEXT_COLOR
+            )
+
             self.draw_bottom_bar()
+            self.draw_menu_instructions(
+                "ENTER ou ESC voltar"
+            )
             self.update_cat()
-            
             self.blit_screen()
