@@ -95,6 +95,7 @@ def criar_jogadores(num_players, num_humanos):
             "cor": cores[i],
             "inventario": criar_inventario(),
             "pontos": 0,
+            "pontos_vitoria_ocultos": 0,
             "ultima_aldeia_inicial": None,
             "cartas_dev": [],
             "cartas_dev_compradas_turno": [],
@@ -266,7 +267,7 @@ def desenhar_vertices_e_aldeias(tela, vertices_globais, vertice_selecionado, jog
 
 
 
-def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fase_inicial, jogadores, mensagem_jogo, escolhendo_vitima_ladrao, vitimas_ladrao, descartando_recursos, jogador_descartando, quantidade_descartar, quantidade_descartada, trocando_banco, recurso_entregar_banco, trocando_jogador, etapa_troca_jogador, troca_jogador, portos, usando_construcao_estradas, estradas_gratis_restantes, usando_ano_fartura, recursos_ano_fartura, usando_monopolio, historico_dados, escolhendo_ladrao):
+def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fase_inicial, jogadores, mensagem_jogo, escolhendo_vitima_ladrao, vitimas_ladrao, descartando_recursos, jogador_descartando, quantidade_descartar, quantidade_descartada, trocando_banco, recurso_entregar_banco, trocando_jogador, etapa_troca_jogador, troca_jogador, portos, usando_construcao_estradas, estradas_gratis_restantes, usando_ano_fartura, recursos_ano_fartura, usando_monopolio, historico_dados, escolhendo_ladrao, banco_recursos):
     pygame.draw.rect(tela, (180, 220, 235), (PAINEL_X, 0, PAINEL_LARGURA, ALTURA))
     pygame.draw.line(tela, PRETO, (PAINEL_X, 0), (PAINEL_X, ALTURA), 2)
     desenhar_barra_inferior(tela)
@@ -357,9 +358,14 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
 
     elif usando_ano_fartura:
         faltam = 2 - len(recursos_ano_fartura)
-        linhas_status.append(f"Ano de Fartura: escolha {faltam} recurso(s).")
-        linhas_status.append("1 Madeira | 2 Tijolo | 3 Ovelha | 4 Trigo | 5 Minerio")
 
+        if mensagem_jogo != "":
+            linhas_status.append(mensagem_jogo)
+        else:
+            linhas_status.append(f"Ano de Fartura: escolha {faltam} recurso(s).")
+
+        linhas_status.append("1 Madeira | 2 Tijolo | 3 Ovelha | 4 Trigo | 5 Minerio")
+        
     elif usando_monopolio:
         linhas_status.append("Monopolio: escolha o recurso.")
         linhas_status.append("1 Madeira | 2 Tijolo | 3 Ovelha | 4 Trigo | 5 Minerio")
@@ -527,7 +533,7 @@ def contar_construcoes_tipo_do_jogador(jogador_atual, tipo):
 
     return total
 
-def tentar_construir_aldeia(pos, vertices_globais, jogador_atual, jogadores, fase_inicial=False, limite_inicial=2):
+def tentar_construir_aldeia(pos, vertices_globais, jogador_atual, jogadores, banco_recursos, fase_inicial=False, limite_inicial=2):
     jogador = jogadores[jogador_atual]
 
     if fase_inicial and contar_construcoes_tipo_do_jogador(jogador_atual, "aldeia") >= limite_inicial:
@@ -556,7 +562,7 @@ def tentar_construir_aldeia(pos, vertices_globais, jogador_atual, jogadores, fas
         return False
 
     if not fase_inicial:
-        gastar_recursos(jogador, CUSTO_ALDEIA)
+        gastar_recursos(jogador, CUSTO_ALDEIA, banco_recursos)
 
     numero_aldeia_inicial = None
 
@@ -574,9 +580,6 @@ def tentar_construir_aldeia(pos, vertices_globais, jogador_atual, jogadores, fas
         jogador["ultima_aldeia_inicial"] = pos
 
     jogador["pontos"] += 1
-
-    if jogador["pontos"] >= PONTOS_PARA_VENCER:
-        print(f"{jogador['nome']} venceu o jogo!")
 
     print(f"{jogador['nome']} construiu uma aldeia.")
     return True
@@ -625,7 +628,7 @@ def contar_estradas_iniciais_do_jogador(jogador_atual):
 
     return total
 
-def tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores, fase_inicial=False, limite_inicial=2, estrada_gratis=False):
+def tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores, banco_recursos, fase_inicial=False, limite_inicial=2, estrada_gratis=False):
     jogador = jogadores[jogador_atual]
 
     if fase_inicial:
@@ -667,7 +670,7 @@ def tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores, fase_inicial=
         return False
 
     if not fase_inicial and not estrada_gratis:
-        gastar_recursos(jogador, CUSTO_ESTRADA)
+        gastar_recursos(jogador, CUSTO_ESTRADA, banco_recursos)
 
     estradas_construidas.append({
         "v1": pos1,
@@ -691,7 +694,7 @@ def contar_cidades_do_jogador(jogador_atual):
 
     return total
 
-def tentar_construir_cidade(pos, jogador_atual, jogadores):
+def tentar_construir_cidade(pos, jogador_atual, jogadores, banco_recursos):
     jogador = jogadores[jogador_atual]
 
     if contar_cidades_do_jogador(jogador_atual) >= LIMITE_CIDADES:
@@ -708,7 +711,7 @@ def tentar_construir_cidade(pos, jogador_atual, jogadores):
                 print("Recursos insuficientes para construir cidade.")
                 return False
 
-            gastar_recursos(jogador, CUSTO_CIDADE)
+            gastar_recursos(jogador, CUSTO_CIDADE, banco_recursos)
             construcao["tipo"] = "cidade"
             jogador["pontos"] += 1
 
@@ -718,27 +721,81 @@ def tentar_construir_cidade(pos, jogador_atual, jogadores):
     print("Você só pode construir cidade em uma aldeia sua.")
     return False
 
-def distribuir_recursos(tabuleiro, dado, jogadores, ladrao):
+def distribuir_recursos(tabuleiro, dado, jogadores, ladrao, banco_recursos):
+    producao = {}
+
+    for recurso in RECURSOS:
+        producao[recurso] = {}
+
     for peca in tabuleiro:
         if peca == ladrao:
             continue
 
-        if peca['numero'] == dado and peca['cor'] != DESERTO:
-            recurso = MAPA_RECURSOS[peca['cor']]
+        if peca["numero"] != dado or peca["cor"] == DESERTO:
+            continue
 
-            for v in peca['vertices']:
-                for aldeia in aldeias_construidas:
-                    vertice_aldeia = aldeia["vertice"]
-                    dono = aldeia["jogador"]
+        recurso = MAPA_RECURSOS[peca["cor"]]
 
-                    if math.hypot(v[0] - vertice_aldeia.x, v[1] - vertice_aldeia.y) < 5:
-                        if aldeia["tipo"] == "cidade":
-                            quantidade = 2
-                        else:
-                            quantidade = 1
+        for v in peca["vertices"]:
+            for construcao in aldeias_construidas:
+                vertice_construcao = construcao["vertice"]
 
-                        jogadores[dono]["inventario"][recurso] += quantidade
-                        print(f"{jogadores[dono]['nome']} recebeu {quantidade} {recurso}")
+                if math.hypot(
+                    v[0] - vertice_construcao.x,
+                    v[1] - vertice_construcao.y
+                ) < 5:
+                    dono = construcao["jogador"]
+
+                    if construcao["tipo"] == "cidade":
+                        quantidade = 2
+                    else:
+                        quantidade = 1
+
+                    if dono not in producao[recurso]:
+                        producao[recurso][dono] = 0
+
+                    producao[recurso][dono] += quantidade
+
+    for recurso, jogadores_recebendo in producao.items():
+        if len(jogadores_recebendo) == 0:
+            continue
+
+        total_necessario = sum(jogadores_recebendo.values())
+        disponivel = banco_recursos[recurso]
+
+        if disponivel >= total_necessario:
+            for jogador_indice, quantidade in jogadores_recebendo.items():
+                retirar_recurso_do_banco(
+                    banco_recursos,
+                    jogadores[jogador_indice],
+                    recurso,
+                    quantidade
+                )
+
+                print(
+                    f"{jogadores[jogador_indice]['nome']} "
+                    f"recebeu {quantidade} {recurso}"
+                )
+
+        elif len(jogadores_recebendo) == 1:
+            jogador_indice = next(iter(jogadores_recebendo))
+            quantidade_recebida = retirar_recurso_do_banco(
+                banco_recursos,
+                jogadores[jogador_indice],
+                recurso,
+                disponivel
+            )
+
+            print(
+                f"{jogadores[jogador_indice]['nome']} "
+                f"recebeu apenas {quantidade_recebida} {recurso}"
+            )
+
+        else:
+            print(
+                f"Banco sem {recurso} suficiente. "
+                f"Nenhum jogador recebeu esse recurso."
+            )
 
 def passar_turno(jogador_atual, jogadores):
     jogador_atual = (jogador_atual + 1) % len(jogadores)
@@ -752,9 +809,10 @@ def tem_recursos(jogador, custo):
     return True
 
 
-def gastar_recursos(jogador, custo):
+def gastar_recursos(jogador, custo, banco_recursos):
     for recurso, quantidade in custo.items():
         jogador["inventario"][recurso] -= quantidade
+        banco_recursos[recurso] += quantidade
 
 CUSTO_ALDEIA = {
     "Madeira": 1,
@@ -778,20 +836,27 @@ LIMITE_ALDEIAS = 5
 LIMITE_CIDADES = 4
 LIMITE_ESTRADAS = 15
 
-def verificar_vencedor(jogadores):
-    for jogador in jogadores:
-        if jogador["pontos"] >= PONTOS_PARA_VENCER:
-            return jogador
+def pontuacao_total(jogador):
+    return jogador["pontos"] + jogador["pontos_vitoria_ocultos"]
+
+def verificar_vencedor(jogadores, jogador_atual):
+    jogador = jogadores[jogador_atual]
+
+    if pontuacao_total(jogador) >= PONTOS_PARA_VENCER:
+        return jogador
+
     return None
 
-def dar_recursos_teste(jogador):
-    jogador["inventario"]["Madeira"] += 1
-    jogador["inventario"]["Tijolo"] += 1
-    jogador["inventario"]["Ovelha"] += 1
-    jogador["inventario"]["Trigo"] += 1
-    jogador["inventario"]["Minério"] += 1
+def dar_recursos_teste(jogador, banco_recursos):
+    for recurso in RECURSOS:
+        retirar_recurso_do_banco(
+            banco_recursos,
+            jogador,
+            recurso,
+            1
+        )
 
-def bot_tentar_construir_aldeia(jogador_atual, jogadores, vertices_globais, fase_inicial=False, limite_inicial=2):
+def bot_tentar_construir_aldeia(jogador_atual, jogadores, banco_recursos, vertices_globais, fase_inicial=False, limite_inicial=2):
     jogador = jogadores[jogador_atual]
 
     if not fase_inicial and not tem_recursos(jogador, CUSTO_ALDEIA):
@@ -801,15 +866,15 @@ def bot_tentar_construir_aldeia(jogador_atual, jogadores, vertices_globais, fase
     random.shuffle(vertices_embaralhados)
 
     for v in vertices_embaralhados:
-        if tentar_construir_aldeia(v, vertices_globais, jogador_atual, jogadores, fase_inicial, limite_inicial):
+        if tentar_construir_aldeia(v, vertices_globais, jogador_atual, jogadores, banco_recursos, fase_inicial, limite_inicial):
             return True
 
     return False
 
-def bot_tentar_construir_estrada(jogador_atual, jogadores, fase_inicial=False, limite_inicial=2):
+def bot_tentar_construir_estrada(jogador_atual, jogadores, banco_recursos, fase_inicial=False, limite_inicial=2, estrada_gratis=False):
     jogador = jogadores[jogador_atual]
 
-    if not fase_inicial and not tem_recursos(jogador, CUSTO_ESTRADA):
+    if not fase_inicial and not estrada_gratis and not tem_recursos(jogador, CUSTO_ESTRADA):
         return False
 
     caminhos_possiveis = []
@@ -832,12 +897,12 @@ def bot_tentar_construir_estrada(jogador_atual, jogadores, fase_inicial=False, l
     random.shuffle(caminhos_possiveis)
 
     for pos1, pos2 in caminhos_possiveis:
-        if tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores, fase_inicial, limite_inicial):
+        if tentar_construir_estrada(pos1, pos2, jogador_atual, jogadores, banco_recursos, fase_inicial, limite_inicial, estrada_gratis):
             return True
 
     return False
 
-def bot_tentar_construir_cidade(jogador_atual, jogadores):
+def bot_tentar_construir_cidade(jogador_atual, jogadores, banco_recursos):
     jogador = jogadores[jogador_atual]
 
     if not tem_recursos(jogador, CUSTO_CIDADE):
@@ -852,14 +917,14 @@ def bot_tentar_construir_cidade(jogador_atual, jogadores):
     random.shuffle(aldeias_do_bot)
 
     for vertice in aldeias_do_bot:
-        if tentar_construir_cidade(vertice, jogador_atual, jogadores):
+        if tentar_construir_cidade(vertice, jogador_atual, jogadores, banco_recursos):
             return True
 
     return False
 
-def dar_recursos_teste_para_todos(jogadores):
+def dar_recursos_teste_para_todos(jogadores, banco_recursos):
     for jogador in jogadores:
-        dar_recursos_teste(jogador)
+        dar_recursos_teste(jogador, banco_recursos)
 
     print("Recursos de teste adicionados para todos.")
 
@@ -873,7 +938,7 @@ def fase_inicial_completa(jogadores):
 
     return True
 
-def distribuir_recursos_iniciais(tabuleiro, jogadores):
+def distribuir_recursos_iniciais(tabuleiro, jogadores, banco_recursos):
     for aldeia in aldeias_construidas:
         if aldeia.get("inicial") != 2:
             continue
@@ -889,8 +954,15 @@ def distribuir_recursos_iniciais(tabuleiro, jogadores):
 
             for v in peca["vertices"]:
                 if math.hypot(v[0] - vertice_aldeia.x, v[1] - vertice_aldeia.y) < 5:
-                    jogadores[dono]["inventario"][recurso] += 1
-                    print(f"{jogadores[dono]['nome']} recebeu 1 {recurso} inicial")
+                    quantidade_recebida = retirar_recurso_do_banco(
+                        banco_recursos,
+                        jogadores[dono],
+                        recurso,
+                        1
+                    )
+
+                    if quantidade_recebida > 0:
+                        print(f"{jogadores[dono]['nome']} recebeu 1 {recurso} inicial")
 
 def criar_ordem_fase_inicial(jogadores):
     ordem_ida = list(range(len(jogadores)))
@@ -1050,6 +1122,14 @@ def roubar_recurso_de_vitima(jogador_atual, vitima_indice, jogadores):
 
 RECURSOS = ["Madeira", "Tijolo", "Ovelha", "Trigo", "Minério"]
 
+QUANTIDADE_INICIAL_BANCO = 19
+
+def criar_banco_recursos():
+    return {
+        recurso: QUANTIDADE_INICIAL_BANCO
+        for recurso in RECURSOS
+    }
+
 def total_recursos(jogador):
     return sum(jogador["inventario"].values())
 
@@ -1068,7 +1148,7 @@ def criar_fila_descarte(jogadores):
     return fila
 
 
-def bot_descartar_recursos(jogador):
+def bot_descartar_recursos(jogador, banco_recursos):
     quantidade = quantidade_para_descartar(jogador)
     descartados = []
 
@@ -1084,6 +1164,7 @@ def bot_descartar_recursos(jogador):
 
         recurso_escolhido = random.choice(recursos_disponiveis)
         jogador["inventario"][recurso_escolhido] -= 1
+        banco_recursos[recurso_escolhido] += 1
         descartados.append(recurso_escolhido)
         quantidade -= 1
 
@@ -1092,12 +1173,12 @@ def bot_descartar_recursos(jogador):
     return mensagem
 
 
-def preparar_proximo_descarte(fila_descarte, jogadores):
+def preparar_proximo_descarte(fila_descarte, jogadores, banco_recursos):
     mensagens_bot = []
 
     while len(fila_descarte) > 0 and jogadores[fila_descarte[0]]["tipo"] == "bot":
         bot_indice = fila_descarte.pop(0)
-        mensagem_bot = bot_descartar_recursos(jogadores[bot_indice])
+        mensagem_bot = bot_descartar_recursos(jogadores[bot_indice], banco_recursos)
         mensagens_bot.append(mensagem_bot)
 
     if len(fila_descarte) > 0:
@@ -1125,8 +1206,13 @@ def preparar_proximo_descarte(fila_descarte, jogadores):
         "mensagem": mensagem
     }
 
-def trocar_com_banco(jogador_atual, jogadores, recurso_entregar, recurso_receber, portos):
+def trocar_com_banco(jogador_atual, jogadores, recurso_entregar, recurso_receber, portos, banco_recursos):
     jogador = jogadores[jogador_atual]
+    
+    if banco_recursos[recurso_receber] < 1:
+        mensagem = f"O banco nao tem {recurso_receber} disponivel."
+        print(mensagem)
+        return mensagem
 
     if recurso_entregar == recurso_receber:
         mensagem = "Escolha recursos diferentes para a troca."
@@ -1141,6 +1227,9 @@ def trocar_com_banco(jogador_atual, jogadores, recurso_entregar, recurso_receber
         return mensagem
 
     jogador["inventario"][recurso_entregar] -= taxa
+    banco_recursos[recurso_entregar] += taxa
+
+    banco_recursos[recurso_receber] -= 1
     jogador["inventario"][recurso_receber] += 1
 
     mensagem = f"{jogador['nome']} trocou {taxa} {recurso_entregar} por 1 {recurso_receber}."
@@ -1325,7 +1414,7 @@ def criar_baralho_desenvolvimento():
     return baralho
 
 
-def comprar_carta_desenvolvimento(jogador, baralho):
+def comprar_carta_desenvolvimento(jogador, baralho, banco_recursos):
     if len(baralho) == 0:
         mensagem = "Nao ha mais cartas de desenvolvimento."
         print(mensagem)
@@ -1336,18 +1425,17 @@ def comprar_carta_desenvolvimento(jogador, baralho):
         print(mensagem)
         return mensagem
 
-    gastar_recursos(jogador, CUSTO_DESENVOLVIMENTO)
+    gastar_recursos(jogador, CUSTO_DESENVOLVIMENTO, banco_recursos)
 
     carta = baralho.pop()
     jogador["cartas_dev"].append(carta)
     jogador["cartas_dev_compradas_turno"].append(carta)
 
     if carta == "Ponto de Vitoria":
-        jogador["pontos"] += 1
-        mensagem = f"{jogador['nome']} comprou Ponto de Vitoria."
-    else:
-        mensagem = f"{jogador['nome']} comprou carta de desenvolvimento: {carta}."
-    
+        jogador["pontos_vitoria_ocultos"] += 1
+
+    mensagem = f"{jogador['nome']} comprou uma carta de desenvolvimento."
+
     print(mensagem)
     return mensagem
 
@@ -1618,20 +1706,42 @@ def existe_acao_pendente(
         or usando_monopolio
     )
 
-def bot_escolher_recurso_ano_fartura(jogador):
+def bot_escolher_recurso_ano_fartura(jogador, banco_recursos):
     prioridade = ["Minério", "Trigo", "Madeira", "Tijolo", "Ovelha"]
     recursos_escolhidos = []
 
     for recurso in prioridade:
-        recursos_escolhidos.append(recurso)
+        while banco_recursos[recurso] > 0 and len(recursos_escolhidos) < 2:
+            retirar_recurso_do_banco(
+                banco_recursos,
+                jogador,
+                recurso,
+                1
+            )
+
+            recursos_escolhidos.append(recurso)
 
         if len(recursos_escolhidos) == 2:
             break
 
-    for recurso in recursos_escolhidos:
-        jogador["inventario"][recurso] += 1
+    if len(recursos_escolhidos) == 0:
+        mensagem = (
+            f"{jogador['nome']} usou Ano de Fartura, "
+            "mas o banco nao tinha recursos disponiveis."
+        )
 
-    mensagem = f"{jogador['nome']} usou Ano de Fartura e recebeu {recursos_escolhidos[0]} e {recursos_escolhidos[1]}."
+    elif len(recursos_escolhidos) == 1:
+        mensagem = (
+            f"{jogador['nome']} usou Ano de Fartura e recebeu "
+            f"apenas 1 {recursos_escolhidos[0]}."
+        )
+
+    else:
+        mensagem = (
+            f"{jogador['nome']} usou Ano de Fartura e recebeu "
+            f"{recursos_escolhidos[0]} e {recursos_escolhidos[1]}."
+        )
+
     print(mensagem)
     return mensagem
 
@@ -1652,7 +1762,7 @@ def bot_escolher_recurso_monopolio(jogador_atual, jogadores):
 
     return melhor_recurso
 
-def bot_tentar_usar_carta_desenvolvimento(jogador_atual, jogadores, tabuleiro, ladrao, vertices_globais):
+def bot_tentar_usar_carta_desenvolvimento(jogador_atual, jogadores, banco_recursos, tabuleiro, ladrao, vertices_globais):
     jogador = jogadores[jogador_atual]
 
     if jogador["usou_carta_dev_turno"]:
@@ -1694,8 +1804,10 @@ def bot_tentar_usar_carta_desenvolvimento(jogador_atual, jogadores, tabuleiro, l
                 construiu = bot_tentar_construir_estrada(
                     jogador_atual,
                     jogadores,
+                    banco_recursos,
                     False,
-                    2
+                    2,
+                    True
                 )
 
                 if construiu:
@@ -1711,7 +1823,7 @@ def bot_tentar_usar_carta_desenvolvimento(jogador_atual, jogadores, tabuleiro, l
 
         if sucesso:
             jogador["usou_carta_dev_turno"] = True
-            mensagem = bot_escolher_recurso_ano_fartura(jogador)
+            mensagem = bot_escolher_recurso_ano_fartura(jogador, banco_recursos)
             return ladrao, mensagem
 
     # 4. Monopólio
@@ -1726,14 +1838,14 @@ def bot_tentar_usar_carta_desenvolvimento(jogador_atual, jogadores, tabuleiro, l
 
     return ladrao, None
 
-def bot_tentar_comprar_carta_desenvolvimento(jogador, baralho):
+def bot_tentar_comprar_carta_desenvolvimento(jogador, baralho, banco_recursos):
     if tem_recursos(jogador, CUSTO_DESENVOLVIMENTO):
-        mensagem = comprar_carta_desenvolvimento(jogador, baralho)
+        mensagem = comprar_carta_desenvolvimento(jogador, baralho, banco_recursos)
         return mensagem
 
     return None
 
-def bot_tentar_troca_banco(jogador_atual, jogadores, portos):
+def bot_tentar_troca_banco(jogador_atual, jogadores, banco_recursos, portos):
     jogador = jogadores[jogador_atual]
 
     recursos_prioridade_receber = ["Minério", "Trigo", "Madeira", "Tijolo", "Ovelha"]
@@ -1749,7 +1861,8 @@ def bot_tentar_troca_banco(jogador_atual, jogadores, portos):
                         jogadores,
                         recurso_entregar,
                         recurso_receber,
-                        portos
+                        portos,
+                        banco_recursos
                     )
                     return mensagem
 
@@ -1806,7 +1919,7 @@ def desenhar_tela_vitoria(tela, vencedor, jogadores):
     y = 270
     for jogador in jogadores:
         texto_pontos = FONTE_TEXTO.render(
-            f"{jogador['nome']}: {jogador['pontos']} pontos",
+            f"{jogador['nome']}: {pontuacao_total(jogador)} pontos"
             True,
             PRETO
         )
@@ -1817,6 +1930,65 @@ def desenhar_tela_vitoria(tela, vencedor, jogadores):
     texto_sair = FONTE_TEXTO.render("Pressione ESC para sair", True, PRETO)
     rect_sair = texto_sair.get_rect(center=(LARGURA // 2, ALTURA - 80))
     tela.blit(texto_sair, rect_sair)
+
+def banco_tem_recursos(banco_recursos, recurso, quantidade):
+    return banco_recursos[recurso] >= quantidade
+
+
+def retirar_recurso_do_banco(banco_recursos, jogador, recurso, quantidade):
+    quantidade_disponivel = banco_recursos[recurso]
+    quantidade_retirada = min(quantidade, quantidade_disponivel)
+
+    banco_recursos[recurso] -= quantidade_retirada
+    jogador["inventario"][recurso] += quantidade_retirada
+
+    return quantidade_retirada
+
+
+def devolver_recurso_ao_banco(banco_recursos, jogador, recurso, quantidade):
+    quantidade_devolvida = min(
+        quantidade,
+        jogador["inventario"][recurso]
+    )
+
+    jogador["inventario"][recurso] -= quantidade_devolvida
+    banco_recursos[recurso] += quantidade_devolvida
+
+    return quantidade_devolvida
+
+def desenhar_banco_recursos(tela, banco_recursos):
+    largura_caixa = 210
+    altura_caixa = 180
+
+    x = PAINEL_X - largura_caixa - 15
+    y = 20
+
+    pygame.draw.rect(
+        tela,
+        (220, 235, 240),
+        (x, y, largura_caixa, altura_caixa)
+    )
+
+    pygame.draw.rect(
+        tela,
+        PRETO,
+        (x, y, largura_caixa, altura_caixa),
+        2
+    )
+
+    titulo = FONTE_TITULO.render("Banco", True, PRETO)
+    tela.blit(titulo, (x + 15, y + 10))
+
+    y_recurso = y + 50
+
+    for recurso, quantidade in banco_recursos.items():
+        texto = FONTE_CONTROLES.render(
+            f"{recurso}: {quantidade}",
+            True,
+            PRETO
+        )
+        tela.blit(texto, (x + 15, y_recurso))
+        y_recurso += 24
 
 def main(game_mode="custom", num_players=2, num_humanos=2):
     relogio = pygame.time.Clock()
@@ -1870,6 +2042,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
     jogador_visivel = jogador_atual
     bot_aguardando_resolucao_7 = False
     historico_dados = []
+    banco_recursos = criar_banco_recursos()
 
     def iniciar_ladrao_apos_descarte():
         nonlocal escolhendo_ladrao
@@ -1939,7 +2112,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
     while rodando:
         TELA.fill(COR_FUNDO)
 
-        vencedor = verificar_vencedor(jogadores)
+        vencedor = verificar_vencedor(jogadores, jogador_atual)
 
         if vencedor is not None:
             desenhar_tela_vitoria(TELA, vencedor, jogadores)
@@ -1988,7 +2161,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
             continue
 
         if fase_inicial and fase_inicial_completa(jogadores):
-            distribuir_recursos_iniciais(tabuleiro, jogadores)
+            distribuir_recursos_iniciais(tabuleiro, jogadores, banco_recursos)
             limpar_dados_fase_inicial(jogadores)
             fase_inicial = False
             print("Fase inicial encerrada automaticamente. O jogo normal começou.")
@@ -2020,6 +2193,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                     bot_tentar_construir_aldeia(
                         jogador_atual,
                         jogadores,
+                        banco_recursos,
                         vertices_globais,
                         fase_inicial,
                         limite_inicial
@@ -2028,6 +2202,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                     bot_tentar_construir_estrada(
                         jogador_atual,
                         jogadores,
+                        banco_recursos,
                         fase_inicial,
                         limite_inicial
                     )
@@ -2049,7 +2224,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                             jogador_que_rolou_7 = jogador_atual
                             fila_descarte = criar_fila_descarte(jogadores)
 
-                            estado_descarte = preparar_proximo_descarte(fila_descarte, jogadores)
+                            estado_descarte = preparar_proximo_descarte(fila_descarte, jogadores, banco_recursos)
 
                             descartando_recursos = estado_descarte["descartando"]
                             jogador_descartando = estado_descarte["jogador_descartando"]
@@ -2077,7 +2252,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
                         else:
                             mensagem_jogo = ""
-                            distribuir_recursos(tabuleiro, ultimo_dado, jogadores, ladrao)
+                            distribuir_recursos(tabuleiro, ultimo_dado, jogadores, ladrao, banco_recursos)
 
                         print(f"{jogador['nome']} rolou o dado: {ultimo_dado}")
 
@@ -2097,6 +2272,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                     ladrao, mensagem_carta_bot = bot_tentar_usar_carta_desenvolvimento(
                         jogador_atual,
                         jogadores,
+                        banco_recursos,
                         tabuleiro,
                         ladrao,
                         vertices_globais
@@ -2107,17 +2283,18 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
                     construiu_algo = False
 
-                    if bot_tentar_construir_cidade(jogador_atual, jogadores):
+                    if bot_tentar_construir_cidade(jogador_atual, jogadores, banco_recursos):
                         construiu_algo = True
-                    elif bot_tentar_construir_aldeia(jogador_atual, jogadores, vertices_globais, fase_inicial):
+                    elif bot_tentar_construir_aldeia(jogador_atual, jogadores, banco_recursos, vertices_globais, fase_inicial):
                         construiu_algo = True
-                    elif bot_tentar_construir_estrada(jogador_atual, jogadores, fase_inicial):
+                    elif bot_tentar_construir_estrada(jogador_atual, jogadores, banco_recursos, fase_inicial):
                         construiu_algo = True
 
                     if not construiu_algo:
                         mensagem_compra = bot_tentar_comprar_carta_desenvolvimento(
                             jogador,
-                            baralho_desenvolvimento
+                            baralho_desenvolvimento,
+                            banco_recursos
                         )
 
                         if mensagem_compra is not None:
@@ -2127,6 +2304,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                             mensagem_troca = bot_tentar_troca_banco(
                                 jogador_atual,
                                 jogadores,
+                                banco_recursos,
                                 portos
                             )
 
@@ -2255,6 +2433,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                                     vertices_globais,
                                     jogador_atual,
                                     jogadores,
+                                    banco_recursos,
                                     fase_inicial,
                                     limite_inicial
                                 )
@@ -2287,6 +2466,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                                                 v,
                                                 jogador_atual,
                                                 jogadores,
+                                                banco_recursos,
                                                 fase_inicial,
                                                 limite_inicial,
                                                 True
@@ -2310,6 +2490,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                                                     v,
                                                     jogador_atual,
                                                     jogadores,
+                                                    banco_recursos,
                                                     fase_inicial,
                                                     limite_inicial
                                                 )
@@ -2359,6 +2540,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
                         if jogador_descarte["inventario"][recurso] > 0:
                             jogador_descarte["inventario"][recurso] -= 1
+                            banco_recursos[recurso] += 1
                             quantidade_descartada += 1
 
                             restante = quantidade_descartar - quantidade_descartada
@@ -2367,7 +2549,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                             if quantidade_descartada >= quantidade_descartar:
                                 fila_descarte.pop(0)
 
-                                estado_descarte = preparar_proximo_descarte(fila_descarte, jogadores)
+                                estado_descarte = preparar_proximo_descarte(fila_descarte, jogadores, banco_recursos)
 
                                 descartando_recursos = estado_descarte["descartando"]
                                 jogador_descartando = estado_descarte["jogador_descartando"]
@@ -2414,7 +2596,8 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                                 jogadores,
                                 recurso_entregar_banco,
                                 recurso_escolhido,
-                                portos
+                                portos, 
+                                banco_recursos
                             )
 
                             trocando_banco = False
@@ -2526,8 +2709,19 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
 
                     if evento.key in teclas_recursos:
                         recurso = teclas_recursos[evento.key]
+                        
+                        if banco_recursos[recurso] <= 0:
+                            mensagem_jogo = f"O banco nao tem {recurso} disponivel."
+                            continue
+
+                        retirar_recurso_do_banco(
+                            banco_recursos,
+                            jogadores[jogador_atual],
+                            recurso,
+                            1
+                        )
+
                         recursos_ano_fartura.append(recurso)
-                        jogadores[jogador_atual]["inventario"][recurso] += 1
 
                         if len(recursos_ano_fartura) < 2:
                             mensagem_jogo = f"Voce recebeu 1 {recurso}. Escolha mais 1 recurso."
@@ -2587,7 +2781,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                             jogador_que_rolou_7 = jogador_atual
                             fila_descarte = criar_fila_descarte(jogadores)
 
-                            estado_descarte = preparar_proximo_descarte(fila_descarte, jogadores)
+                            estado_descarte = preparar_proximo_descarte(fila_descarte, jogadores, banco_recursos)
 
                             descartando_recursos = estado_descarte["descartando"]
                             jogador_descartando = estado_descarte["jogador_descartando"]
@@ -2610,7 +2804,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                                 )
                         else:
                             mensagem_jogo = ""
-                            distribuir_recursos(tabuleiro, ultimo_dado, jogadores, ladrao)
+                            distribuir_recursos(tabuleiro, ultimo_dado, jogadores, ladrao, banco_recursos)
                         
                         dado_rolado_no_turno = True
                         print(f"{jogadores[jogador_atual]['nome']} rolou o dado: {ultimo_dado}")
@@ -2686,7 +2880,8 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                     else:
                         mensagem_jogo = comprar_carta_desenvolvimento(
                             jogadores[jogador_atual],
-                            baralho_desenvolvimento
+                            baralho_desenvolvimento,
+                            banco_recursos
                         )
                 elif evento.key == pygame.K_m:
                     jogador = jogadores[jogador_atual]
@@ -2729,7 +2924,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                             jogador["usou_carta_dev_turno"] = True
                             usando_ano_fartura = True
                             recursos_ano_fartura = []
-                            mensagem_jogo = "Ano de Fartura: escolha 2 recursos. 1 Mad, 2 Tij, 3 Ove, 4 Tri, 5 Min."
+                            mensagem_jogo = ""
 
                 elif evento.key == pygame.K_k:
                     jogador = jogadores[jogador_atual]
@@ -2783,11 +2978,11 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                             mensagem_jogo = "Construcao de Estradas: construa 2 estradas gratis."
 
                 elif evento.key == pygame.K_t:
-                    dar_recursos_teste(jogadores[jogador_atual])
+                    dar_recursos_teste(jogadores[jogador_atual], banco_recursos)
                     print(f"Recursos adicionados para {jogadores[jogador_atual]['nome']}")
                 
                 elif evento.key == pygame.K_y:
-                    dar_recursos_teste_para_todos(jogadores)
+                    dar_recursos_teste_para_todos(jogadores, banco_recursos)
                 
                 elif evento.key == pygame.K_i:
                     fase_inicial = False
@@ -2811,7 +3006,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
                         if not dado_rolado_no_turno:
                             print("Você precisa rolar o dado antes de construir.")
                         else:
-                            tentar_construir_cidade(vertice_selecionado, jogador_atual, jogadores)
+                            tentar_construir_cidade(vertice_selecionado, jogador_atual, jogadores, banco_recursos)
 
                         vertice_selecionado = None
 
@@ -2821,6 +3016,7 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
         desenhar_tabuleiro(TELA, tabuleiro, ultimo_dado, ladrao)
         desenhar_portos(TELA, portos)
         desenhar_vertices_e_aldeias(TELA, vertices_globais, vertice_selecionado, jogadores)
+        desenhar_banco_recursos(TELA, banco_recursos)
         jogador_interface = jogadores[jogador_atual]
 
         if descartando_recursos and jogador_descartando is not None:
@@ -2853,7 +3049,8 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
             recursos_ano_fartura,
             usando_monopolio,
             historico_dados,
-            escolhendo_ladrao
+            escolhendo_ladrao,
+            banco_recursos
         )
 
         pygame.display.flip()
