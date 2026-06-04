@@ -1,11 +1,12 @@
 import pygame
+from recursos import caminho_asset
 
 class Menu():
     def __init__(self, game):
         self.game = game
 
         # Carrega a imagem original do fundo
-        imagem_original = pygame.image.load("assets/CATTAN menu inicial.png").convert()
+        imagem_original = pygame.image.load(caminho_asset("CATTAN menu inicial.png")).convert()
         self.background = pygame.transform.scale(imagem_original, (self.game.DISPLAY_W, self.game.DISPLAY_H))
         
         self.mid_w, self.mid_h = self.game.DISPLAY_W / 2 , self.game.DISPLAY_H / 2
@@ -25,7 +26,7 @@ class Menu():
         # Carrega os frames (1, 2 e 3 conforme os arquivos na pasta assets)
         self.cat_frames = []
         for frame_num in range(1, 4): # Isso vai gerar os números 1, 2 e 3
-            img = pygame.image.load(f"assets/gt.{frame_num}.png").convert_alpha()
+            img = pygame.image.load(caminho_asset(f"gt.{frame_num}.png")).convert_alpha()
             # Redimensiona mantendo o aspecto, com altura 40
             largura_original, altura_original = img.get_size()
             proporcao = largura_original / altura_original
@@ -155,7 +156,7 @@ class MainMenu(Menu):
         btn_w, btn_h = 150, 55
 
         self.title_image = pygame.image.load(
-            "assets/Menu-principal.png"
+            caminho_asset("Menu-principal.png")
         ).convert_alpha()
         self.title_image = pygame.transform.smoothscale(
             self.title_image,
@@ -166,7 +167,7 @@ class MainMenu(Menu):
         )
 
         self.start_img = pygame.image.load(
-            "assets/Iniciar-jogo.png"
+            caminho_asset("Iniciar-jogo.png")
         ).convert_alpha()
         self.start_img = pygame.transform.smoothscale(
             self.start_img,
@@ -177,7 +178,7 @@ class MainMenu(Menu):
         )
 
         self.options_img = pygame.image.load(
-            "assets/configurações.png"
+            caminho_asset("configurações.png")
         ).convert_alpha()
         self.options_img = pygame.transform.smoothscale(
             self.options_img,
@@ -188,7 +189,7 @@ class MainMenu(Menu):
         )
 
         self.credits_img = pygame.image.load(
-            "assets/Creditos.png"
+            caminho_asset("Creditos.png")
         ).convert_alpha()
         self.credits_img = pygame.transform.smoothscale(
             self.credits_img,
@@ -199,7 +200,7 @@ class MainMenu(Menu):
         )
 
         self.exit_img = pygame.image.load(
-            "assets/Sair.png"
+            caminho_asset("Sair.png")
         ).convert_alpha()
         self.exit_img = pygame.transform.smoothscale(
             self.exit_img,

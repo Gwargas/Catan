@@ -1,6 +1,7 @@
 import pygame
 from menu2 import *
 import gameloop
+from recursos import caminho_asset
 
 
 class Game():
@@ -28,13 +29,13 @@ class Game():
         self.music_volume = 0.5
         self.effects_volume = 0.5
 
-        self.cursor_sound = pygame.mixer.Sound("assets/cursor.wav")
-        self.confirm_sound = pygame.mixer.Sound("assets/miado_confirmar.ogg")
-        self.back_sound = pygame.mixer.Sound("assets/miado_voltar.ogg")
+        self.cursor_sound = pygame.mixer.Sound(caminho_asset("cursor.wav"))
+        self.confirm_sound = pygame.mixer.Sound(caminho_asset("miado_confirmar.ogg"))
+        self.back_sound = pygame.mixer.Sound(caminho_asset("miado_voltar.ogg"))
         self.cursor_sound.set_volume(self.effects_volume)
         self.confirm_sound.set_volume(self.effects_volume)
 
-        pygame.mixer.music.load("assets/catanwaltz.wav")
+        pygame.mixer.music.load(caminho_asset("catanwaltz.wav"))
         pygame.mixer.music.set_volume(self.music_volume)
         pygame.mixer.music.play(-1)
 
