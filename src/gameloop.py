@@ -1919,7 +1919,7 @@ def desenhar_tela_vitoria(tela, vencedor, jogadores):
     y = 270
     for jogador in jogadores:
         texto_pontos = FONTE_TEXTO.render(
-            f"{jogador['nome']}: {pontuacao_total(jogador)} pontos"
+            f"{jogador['nome']}: {pontuacao_total(jogador)} pontos",
             True,
             PRETO
         )
