@@ -15,7 +15,7 @@ class Game():
         self.RIGHT_KEY = False
         self.START_KEY = False
         self.BACK_KEY = False
-        self.DISPLAY_W, self.DISPLAY_H = 1100, 700
+        self.DISPLAY_W, self.DISPLAY_H = 1200, 700
         self.display = pygame.Surface((self.DISPLAY_W, self.DISPLAY_H))
         self.window = pygame.display.set_mode(((self.DISPLAY_W, self.DISPLAY_H)))
         self.font_name = pygame.font.get_default_font()

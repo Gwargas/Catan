@@ -4,15 +4,20 @@ import random
 import sys
 
 pygame.init()
-LARGURA, ALTURA = 1100, 700
-PAINEL_X = 840
-PAINEL_LARGURA = 260
-AREA_MAPA_LARGURA = 820
+LARGURA, ALTURA = 1200, 700
+PAINEL_X = 930
+PAINEL_LARGURA = 270
+AREA_MAPA_LARGURA = 900
+
+BARRA_INFERIOR_ALTURA = 145
+BARRA_INFERIOR_Y = ALTURA - BARRA_INFERIOR_ALTURA
+
 TELA = pygame.display.set_mode((LARGURA, ALTURA))
 pygame.display.set_caption("CATAN")
 FONTE_NUMEROS = pygame.font.SysFont("Arial", 24, bold=True)
 FONTE_TEXTO = pygame.font.SysFont("Arial", 22)
 FONTE_TITULO = pygame.font.SysFont("Arial", 26, bold=True)
+FONTE_CONTROLES = pygame.font.SysFont("Arial", 18)
 
 PRETO = (0, 0, 0)
 BRANCO = (255, 255, 255)
@@ -111,6 +116,20 @@ class vertice:
     def add_vizinho(self, v):
         self.vizinhos.append(v)
 
+def desenhar_barra_inferior(tela):
+    pygame.draw.rect(
+        tela,
+        (220, 235, 240),
+        (0, BARRA_INFERIOR_Y, PAINEL_X, BARRA_INFERIOR_ALTURA)
+    )
+    pygame.draw.line(
+        tela,
+        PRETO,
+        (0, BARRA_INFERIOR_Y),
+        (PAINEL_X, BARRA_INFERIOR_Y),
+        2
+    )
+
 def calcular_pontos_hexagono(centro_x, centro_y, tamanho):
     pontos = []
     for i in range(6):
@@ -129,7 +148,7 @@ def gerar_tabuleiro():
     vertices_globais = []
     
     centro_tela_x = AREA_MAPA_LARGURA // 2
-    centro_tela_y = ALTURA // 2 - (2 * altura_hex * 0.75)
+    centro_tela_y = 175
     
     idx_terreno = 0
     idx_ficha = 0
@@ -247,212 +266,147 @@ def desenhar_vertices_e_aldeias(tela, vertices_globais, vertice_selecionado, jog
 
 
 
-def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fase_inicial, jogadores, mensagem_jogo, escolhendo_vitima_ladrao, vitimas_ladrao, descartando_recursos, jogador_descartando, quantidade_descartar, quantidade_descartada, trocando_banco, recurso_entregar_banco, trocando_jogador, etapa_troca_jogador, troca_jogador, portos, usando_construcao_estradas, estradas_gratis_restantes, usando_ano_fartura, recursos_ano_fartura, usando_monopolio, historico_dados):
+def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fase_inicial, jogadores, mensagem_jogo, escolhendo_vitima_ladrao, vitimas_ladrao, descartando_recursos, jogador_descartando, quantidade_descartar, quantidade_descartada, trocando_banco, recurso_entregar_banco, trocando_jogador, etapa_troca_jogador, troca_jogador, portos, usando_construcao_estradas, estradas_gratis_restantes, usando_ano_fartura, recursos_ano_fartura, usando_monopolio, historico_dados, escolhendo_ladrao):
     pygame.draw.rect(tela, (180, 220, 235), (PAINEL_X, 0, PAINEL_LARGURA, ALTURA))
     pygame.draw.line(tela, PRETO, (PAINEL_X, 0), (PAINEL_X, ALTURA), 2)
+    desenhar_barra_inferior(tela)
 
-    if fase_inicial:
-        texto_fase = FONTE_TEXTO.render("Fase inicial: construa 2 aldeias e 2 estradas", True, PRETO)
-        tela.blit(texto_fase, (20, ALTURA - 105))
-
-        aldeias_iniciais = contar_construcoes_tipo_do_jogador(jogador_atual["indice"], "aldeia")
-        estradas_iniciais = contar_estradas_iniciais_do_jogador(jogador_atual["indice"])
-
-        texto_contagem = FONTE_TEXTO.render(
-            f"Iniciais: {aldeias_iniciais}/2 aldeias, {estradas_iniciais}/2 estradas",
+    if len(historico_dados) == 0:
+        texto_hist = FONTE_TITULO.render(
+            "Historico dos dados: nenhum dado rolado ainda.",
             True,
             PRETO
         )
-        tela.blit(texto_contagem, (20, ALTURA - 80))
-
-    texto_modo = FONTE_TEXTO.render(f"Modo: {game_mode}", True, PRETO)
-    tela.blit(texto_modo, (20, 20))
-
-    texto_jogador = FONTE_TEXTO.render(
-    f"Vez de: {jogador_atual['nome']} ({jogador_atual['tipo']})",
-    True,
-    PRETO
-    )
-    tela.blit(texto_jogador, (20, 45))
-
-    texto_pontos = FONTE_TEXTO.render(f"Pontos: {jogador_atual['pontos']}", True, PRETO)
-    tela.blit(texto_pontos, (20, 70))
-    
-    indice_jogador = jogador_atual["indice"]
-
-    aldeias_restantes = LIMITE_ALDEIAS - contar_aldeias_do_jogador(indice_jogador)
-    cidades_restantes = LIMITE_CIDADES - contar_cidades_do_jogador(indice_jogador)
-    estradas_restantes = LIMITE_ESTRADAS - contar_estradas_do_jogador(indice_jogador)
-
-    tela.blit(FONTE_TITULO.render("Historico dos dados:", True, PRETO), (20, 95))
-
-    y_dados = 120
-
-    if len(historico_dados) == 0:
-        texto_sem_dados = FONTE_TEXTO.render("Nenhum dado rolado ainda.", True, PRETO)
-        tela.blit(texto_sem_dados, (20, y_dados))
+        tela.blit(texto_hist, (20, 20))
+        y_dados = 55
     else:
+        tela.blit(FONTE_TITULO.render("Historico dos dados:", True, PRETO), (20, 20))
+        y_dados = 55
+
         for item in historico_dados[-5:]:
             texto_dado = FONTE_TEXTO.render(item, True, PRETO)
             tela.blit(texto_dado, (20, y_dados))
             y_dados += 24
 
-    if descartando_recursos and jogador_descartando is not None:
-        jogador_descarte = jogadores[jogador_descartando]
-        faltam = quantidade_descartar - quantidade_descartada
+    linhas_status = []
 
-        texto_descarte = FONTE_TEXTO.render(
-            f"{jogador_descarte['nome']} descartando: faltam {faltam}",
-            True,
-            PRETO
+    if descartando_recursos:
+        linhas_status.append(
+            f"Descarte: {jogadores[jogador_descartando]['nome']} deve descartar "
+            f"{quantidade_descartar - quantidade_descartada} recurso(s)."
         )
-        tela.blit(texto_descarte, (20, ALTURA - 130))
+        linhas_status.append("Escolha: 1 Madeira | 2 Tijolo | 3 Ovelha | 4 Trigo | 5 Minerio")
+    
+    elif escolhendo_ladrao:
+        linhas_status.append("Ladrao: clique em um terreno diferente para mover o ladrao.")
 
-        texto_opcoes = FONTE_TEXTO.render(
-            "1 Madeira | 2 Tijolo | 3 Ovelha | 4 Trigo | 5 Minerio",
-            True,
-            PRETO
-        )
-        tela.blit(texto_opcoes, (20, ALTURA - 105))
+    elif escolhendo_vitima_ladrao:
+        linhas_status.append("Ladrao: escolha a vitima.")
+        opcoes = []
+        numero = 1
+        for vitima in vitimas_ladrao:
+            opcoes.append(f"{numero}-{jogadores[vitima]['nome']}")
+            numero += 1
+        if opcoes:
+            linhas_status.append(" | ".join(opcoes))
 
-    if trocando_banco:
+    elif trocando_banco:
         if recurso_entregar_banco is None:
-            texto_banco = FONTE_TEXTO.render(
-                "Banco/Porto - escolha recurso para entregar: 1 Mad, 2 Tij, 3 Ove, 4 Tri, 5 Min",
-                True,
-                PRETO
-            )
+            linhas_status.append("Banco/Porto: escolha o recurso para entregar.")
+            linhas_status.append("1 Madeira | 2 Tijolo | 3 Ovelha | 4 Trigo | 5 Minerio")
         else:
             taxa = taxa_troca_banco(jogador_atual["indice"], recurso_entregar_banco, portos)
+            linhas_status.append(f"Banco {taxa}:1 - entregando {recurso_entregar_banco}.")
+            linhas_status.append("Escolha o recurso para receber: 1 Mad | 2 Tij | 3 Ove | 4 Tri | 5 Min")
 
-            texto_banco = FONTE_TEXTO.render(
-                f"Banco {taxa}:1 - entregando {recurso_entregar_banco}. Escolha recurso para receber.",
-                True,
-                PRETO
-            )
-
-        tela.blit(texto_banco, (20, ALTURA - 105))
-
-    if trocando_jogador:
+    elif trocando_jogador:
         textos_etapas = {
-            "escolher_alvo": "Escolha com quem deseja trocar",
-            "recurso_oferecido": "Escolha o recurso que voce vai oferecer",
-            "quantidade_oferecida": "Escolha quanto voce vai oferecer",
-            "recurso_pedido": "Escolha o recurso que voce quer receber",
-            "quantidade_pedida": "Escolha quanto voce quer receber",
-            "confirmar": "Aguardando resposta da troca"
+            "escolher_alvo": "Troca entre jogadores: escolha com quem deseja trocar",
+            "recurso_oferecido": "Troca entre jogadores: escolha o recurso que voce vai oferecer",
+            "quantidade_oferecida": "Troca entre jogadores: escolha quanto voce vai oferecer",
+            "recurso_pedido": "Troca entre jogadores: escolha o recurso que voce quer receber",
+            "quantidade_pedida": "Troca entre jogadores: escolha quanto voce quer receber",
+            "confirmar": "Troca entre jogadores: aguardando resposta"
         }
 
-        texto_etapa = textos_etapas.get(etapa_troca_jogador, "Troca entre jogadores")
-
-        texto_troca = FONTE_TEXTO.render(
-            f"Troca entre jogadores: {texto_etapa}",
-            True,
-            PRETO
-        )
-        tela.blit(texto_troca, (20, ALTURA - 140))
+        linhas_status.append(textos_etapas.get(etapa_troca_jogador, "Troca entre jogadores"))
 
         if etapa_troca_jogador == "escolher_alvo":
-            y_alvo = ALTURA - 115
+            nomes = []
             numero_opcao = 1
-
             for i, jogador in enumerate(jogadores):
                 if i != jogador_atual["indice"]:
-                    texto_alvo = FONTE_TEXTO.render(
-                        f"{numero_opcao} - {jogador['nome']}",
-                        True,
-                        PRETO
-                    )
-                    tela.blit(texto_alvo, (20, y_alvo))
-                    y_alvo += 22
+                    nomes.append(f"{numero_opcao}-{jogador['nome']}")
                     numero_opcao += 1
+            linhas_status.append(" | ".join(nomes))
 
         elif etapa_troca_jogador in ["recurso_oferecido", "recurso_pedido"]:
-            texto_recursos = FONTE_TEXTO.render(
-                "1 Madeira | 2 Tijolo | 3 Ovelha | 4 Trigo | 5 Minerio",
-                True,
-                PRETO
-            )
-            tela.blit(texto_recursos, (20, ALTURA - 115))
+            linhas_status.append("1 Madeira | 2 Tijolo | 3 Ovelha | 4 Trigo | 5 Minerio")
 
         elif etapa_troca_jogador in ["quantidade_oferecida", "quantidade_pedida"]:
-            texto_quantidade = FONTE_TEXTO.render(
-                "Escolha quantidade: 1 a 9",
-                True,
-                PRETO
-            )
-            tela.blit(texto_quantidade, (20, ALTURA - 115))
+            linhas_status.append("Escolha quantidade: 1 a 9")
 
         elif etapa_troca_jogador == "confirmar":
             alvo = jogadores[troca_jogador["alvo"]]
-
-            texto_confirmar = FONTE_TEXTO.render(
-                f"{alvo['nome']}: S aceita | N recusa",
-                True,
-                PRETO
+            linhas_status.append(
+                f"{alvo['nome']}: S aceita | N recusa"
             )
-            tela.blit(texto_confirmar, (20, ALTURA - 115))
 
-            texto_resumo = FONTE_TEXTO.render(
-                f"Recebe {troca_jogador['quantidade_oferecida']} {troca_jogador['recurso_oferecido']} "
-                f"e entrega {troca_jogador['quantidade_pedida']} {troca_jogador['recurso_pedido']}",
-                True,
-                PRETO
-            )
-            tela.blit(texto_resumo, (20, ALTURA - 90))
+    elif usando_construcao_estradas:
+        linhas_status.append(f"Construcao de Estradas ativa: faltam {estradas_gratis_restantes} estrada(s).")
 
-    if mensagem_jogo != "":
-        texto_mensagem = FONTE_TITULO.render(mensagem_jogo, True, PRETO)
-        tela.blit(texto_mensagem, (20, ALTURA - 80))
-    
-    if usando_construcao_estradas:
-        texto_estradas_gratis = FONTE_TEXTO.render(
-            f"Construcao de Estradas ativa: faltam {estradas_gratis_restantes} estrada(s)",
-            True,
-            PRETO
-        )
-        tela.blit(texto_estradas_gratis, (20, ALTURA - 105))
-
-    if usando_ano_fartura:
+    elif usando_ano_fartura:
         faltam = 2 - len(recursos_ano_fartura)
+        linhas_status.append(f"Ano de Fartura: escolha {faltam} recurso(s).")
+        linhas_status.append("1 Madeira | 2 Tijolo | 3 Ovelha | 4 Trigo | 5 Minerio")
 
-        texto_fartura = FONTE_TEXTO.render(
-            f"Ano de Fartura ativo: escolha {faltam} recurso(s). 1 Mad, 2 Tij, 3 Ove, 4 Tri, 5 Min",
-            True,
-            PRETO
-        )
-        tela.blit(texto_fartura, (20, ALTURA - 130))
+    elif usando_monopolio:
+        linhas_status.append("Monopolio: escolha o recurso.")
+        linhas_status.append("1 Madeira | 2 Tijolo | 3 Ovelha | 4 Trigo | 5 Minerio")
 
-    if usando_monopolio:
-        texto_monopolio = FONTE_TEXTO.render(
-            "Monopolio ativo: escolha recurso. 1 Mad, 2 Tij, 3 Ove, 4 Tri, 5 Min",
-            True,
-            PRETO
-        )
-        tela.blit(texto_monopolio, (20, ALTURA - 155))
+    elif fase_inicial:
+        linhas_status.append("Fase inicial: construa 2 aldeias e 2 estradas.")
+        aldeias_iniciais = contar_construcoes_tipo_do_jogador(jogador_atual["indice"], "aldeia")
+        estradas_iniciais = contar_estradas_iniciais_do_jogador(jogador_atual["indice"])
+        linhas_status.append(f"Iniciais: {aldeias_iniciais}/2 aldeias | {estradas_iniciais}/2 estradas")
 
-    if escolhendo_vitima_ladrao:
-        y_vitima = ALTURA - 175
+    elif mensagem_jogo != "":
+        linhas_status.append(mensagem_jogo)
+        
+    y_status = BARRA_INFERIOR_Y + 12
+    for linha in linhas_status[:2]:
+        texto_status = FONTE_TEXTO.render(linha, True, PRETO)
+        tela.blit(texto_status, (20, y_status))
+        y_status += 26 
 
-        texto_instrucao = FONTE_TEXTO.render("Escolha a vitima do ladrao:", True, PRETO)
-        tela.blit(texto_instrucao, (20, y_vitima))
+    # =========================
+    # PAINEL LATERAL
+    # =========================
 
-        y_vitima += 25
+    # titulo jogador atual
+    tela.blit(FONTE_TITULO.render("Jogador atual", True, PRETO), (PAINEL_X + 20, 20))
 
-        for i, vitima_indice in enumerate(vitimas_ladrao):
-            jogador_vitima = jogadores[vitima_indice]
+    pygame.draw.circle(tela, jogador_atual["cor"], (PAINEL_X + 30, 60), 10)
+    texto_nome_atual = FONTE_TEXTO.render(
+        f"{jogador_atual['nome']} ({jogador_atual['tipo']})",
+        True,
+        PRETO
+    )
+    tela.blit(texto_nome_atual, (PAINEL_X + 50, 48))
 
-            texto_vitima = FONTE_TEXTO.render(
-                f"{i + 1} - {jogador_vitima['nome']}",
-                True,
-                PRETO
-            )
-            tela.blit(texto_vitima, (20, y_vitima))
-            y_vitima += 25
-    
-    tela.blit(FONTE_TITULO.render("Pontuação:", True, PRETO), (PAINEL_X + 20, 210))
+    texto_pts_atual = FONTE_TEXTO.render(f"Pontos: {jogador_atual['pontos']}", True, PRETO)
+    tela.blit(texto_pts_atual, (PAINEL_X + 20, 80))
 
-    tela.blit(FONTE_TITULO.render("Desenvolvimento:", True, PRETO), (PAINEL_X + 20, 360))
+    # inventario
+    tela.blit(FONTE_TITULO.render("Inventario", True, PRETO), (PAINEL_X + 20, 120))
+    y_inv = 155
+    for recurso, quantidade in jogador_atual["inventario"].items():
+        texto_rec = FONTE_TEXTO.render(f"{recurso}: {quantidade}", True, PRETO)
+        tela.blit(texto_rec, (PAINEL_X + 20, y_inv))
+        y_inv += 28
+
+    # desenvolvimento
+    tela.blit(FONTE_TITULO.render("Desenvolvimento", True, PRETO), (PAINEL_X + 20, 295))
 
     cartas = jogador_atual["cartas_dev"]
     cavaleiros_na_mao = cartas.count("Cavaleiro")
@@ -461,73 +415,69 @@ def desenhar_interface(tela, ultimo_dado, game_mode, jogador_atual, vencedor, fa
     ano_fartura = cartas.count("Ano de Fartura")
     monopolio = cartas.count("Monopolio")
 
-    texto_cartas = FONTE_TEXTO.render(f"Cartas totais: {len(cartas)}", True, PRETO)
-    tela.blit(texto_cartas, (PAINEL_X + 20, 400))
-
-    texto_cav_mao = FONTE_TEXTO.render(f"Cavaleiro na mao: {cavaleiros_na_mao}", True, PRETO)
-    tela.blit(texto_cav_mao, (PAINEL_X + 20, 425))
-
-    texto_cavaleiros = FONTE_TEXTO.render(
+    linhas_dev = [
+        f"Cartas totais: {len(cartas)}",
+        f"Cavaleiro na mao: {cavaleiros_na_mao}",
         f"Cavaleiros usados: {jogador_atual['cavaleiros_usados']}",
-        True,
-        PRETO
-    )
-    tela.blit(texto_cavaleiros, (PAINEL_X + 20, 450))
+        f"Ponto de Vitoria: {pontos_vitoria_dev}",
+        f"Construcao de Estradas: {construcao_estradas}",
+        f"Ano de Fartura: {ano_fartura}",
+        f"Monopolio: {monopolio}",
+        f"Maior Exercito: {nome_dono_maior_exercito(jogadores)}",
+        f"Maior Estrada: {nome_dono_maior_estrada(jogadores)}",
+    ]
 
-    dono_exercito = nome_dono_maior_exercito(jogadores)
-    texto_maior_exercito = FONTE_TEXTO.render(
-        f"Maior Exercito: {dono_exercito}",
-        True,
-        PRETO
-    )
-    tela.blit(texto_maior_exercito, (PAINEL_X + 20, 475))
+    y_dev = 330
+    for linha in linhas_dev:
+        texto_linha = FONTE_TEXTO.render(linha, True, PRETO)
+        tela.blit(texto_linha, (PAINEL_X + 20, y_dev))
+        y_dev += 22
 
-    dono_estrada = nome_dono_maior_estrada(jogadores)
+    # todos os jogadores
+    tela.blit(FONTE_TITULO.render("Jogadores", True, PRETO), (PAINEL_X + 20, 545))
 
-    texto_maior_estrada = FONTE_TEXTO.render(
-        f"Maior Estrada: {dono_estrada}",
-        True,
-        PRETO
-    )
-    tela.blit(texto_maior_estrada, (PAINEL_X + 20, 500))
-
-    texto_outras = FONTE_TEXTO.render(
-        f"PV:{pontos_vitoria_dev} CE:{construcao_estradas} AF:{ano_fartura} M:{monopolio}",
-        True,
-        PRETO
-    )
-    tela.blit(texto_outras, (PAINEL_X + 20, 525))
-
-    y_pontos = 250
+    y_jogs = 580
     for jogador in jogadores:
-        texto_ponto = FONTE_TEXTO.render(
-            f"{jogador['nome']}: {jogador['pontos']}",
+        pygame.draw.circle(tela, jogador["cor"], (PAINEL_X + 30, y_jogs + 8), 8)
+
+        extras = []
+        if jogador["maior_exercito"]:
+            extras.append("ME")
+        if jogador["maior_estrada"]:
+            extras.append("MR")
+
+        sufixo = ""
+        if extras:
+            sufixo = " [" + ", ".join(extras) + "]"
+
+        texto_j = FONTE_TEXTO.render(
+            f"{jogador['nome']} ({jogador['tipo']}): {jogador['pontos']} pts{sufixo}",
             True,
             PRETO
         )
-        tela.blit(texto_ponto, (PAINEL_X + 20, y_pontos))
-        y_pontos += 25
+        tela.blit(texto_j, (PAINEL_X + 50, y_jogs))
+        y_jogs += 26
 
-    tela.blit(FONTE_TITULO.render("Inventário:", True, PRETO), (PAINEL_X + 20, 20))
-    y_inv = 60
-    for recurso, quantidade in jogador_atual["inventario"].items():
-        texto_rec = FONTE_TEXTO.render(f"{recurso}: {quantidade}", True, PRETO)
-        tela.blit(texto_rec, (PAINEL_X + 20, y_inv))
-        y_inv += 30
-    
-    texto_controles_1 = FONTE_TEXTO.render(
-        "ESPACO: rolar dados | ENTER: passar turno | C: construir cidade | D: comprar desenvolvimento",
+    texto_controles_1 = FONTE_CONTROLES.render(
+        "Turno: ESPACO rolar dados | ENTER passar turno",
         True,
         PRETO
     )
-    tela.blit(texto_controles_1, (20, ALTURA - 50))
+    tela.blit(texto_controles_1, (20, BARRA_INFERIOR_Y + 70))
 
-    texto_controles_2 = FONTE_TEXTO.render(
-         "B: banco | P: propor troca | K: Cavaleiro | R: Estradas | F: Fartura | M: Monopolio",
+    texto_controles_2 = FONTE_CONTROLES.render(
+        "Construir e trocar: C cidade | B banco/porto | P troca com jogador",
         True,
         PRETO
     )
-    tela.blit(texto_controles_2, (20, ALTURA - 25))
+    tela.blit(texto_controles_2, (20, BARRA_INFERIOR_Y + 94))
+
+    texto_controles_3 = FONTE_CONTROLES.render(
+        "Cartas: D comprar | K Cavaleiro | R Estradas | F Fartura | M Monopolio",
+        True,
+        PRETO
+    )
+    tela.blit(texto_controles_3, (20, BARRA_INFERIOR_Y + 118))
 
 def selecionar_ponto(pos_mouse, vertices_globais):
     mx, my = pos_mouse
@@ -2902,7 +2852,8 @@ def main(game_mode="custom", num_players=2, num_humanos=2):
             usando_ano_fartura,
             recursos_ano_fartura,
             usando_monopolio,
-            historico_dados
+            historico_dados,
+            escolhendo_ladrao
         )
 
         pygame.display.flip()
