@@ -145,50 +145,113 @@ def gerar_tabuleiro():
     largura_hex = math.sqrt(3) * TAMANHO_HEX
     altura_hex = 2 * TAMANHO_HEX
     padrao_linhas = [3, 4, 5, 4, 3]
-    tabuleiro = []
-    vertices_globais = []
     
+    # --- Geração do Layout dos Terrenos ---
+    terrenos_com_deserto = [FLORESTA]*4 + [COLINA]*3 + [PASTO]*4 + [PLANTACAO]*4 + [MONTANHA]*3 + [DESERTO]*1
+    random.shuffle(terrenos_com_deserto)
+    
+    # --- Geração das Fichas com a nova regra ---
+    fichas_sem_6_8 = [2, 3, 3, 4, 4, 5, 5, 9, 9, 10, 10, 11, 11, 12]
+    random.shuffle(fichas_sem_6_8)
+    
+    tabuleiro_temporario = []
+    
+    # 1. Monta o tabuleiro com terrenos e coordenadas de centro
     centro_tela_x = AREA_MAPA_LARGURA // 2
     centro_tela_y = 175
-    
     idx_terreno = 0
-    idx_ficha = 0
-    
     for linha, num_hexes in enumerate(padrao_linhas):
         offset_x = centro_tela_x - (num_hexes * largura_hex) / 2 + (largura_hex / 2)
         offset_y = centro_tela_y + linha * (altura_hex * 0.75)
-        
         for col in range(num_hexes):
             cx = offset_x + col * largura_hex
             cy = offset_y
-            cor = TERRENOS[idx_terreno]
-            numero = None
-            if cor != DESERTO:
-                numero = FICHAS[idx_ficha]
-                idx_ficha += 1
+            cor = terrenos_com_deserto[idx_terreno]
+            tabuleiro_temporario.append({'cor': cor, 'centro': (cx, cy), 'vizinhos': []})
+            idx_terreno += 1
+
+    # 2. Encontra os vizinhos de cada hexágono baseado na distância
+    distancia_vizinho = largura_hex * 1.1 
+    for i, peca in enumerate(tabuleiro_temporario):
+        for j, outra_peca in enumerate(tabuleiro_temporario):
+            if i == j: continue
+            dist = math.dist(peca['centro'], outra_peca['centro'])
+            if dist < distancia_vizinho:
+                peca['vizinhos'].append(j)
+
+    # 3. Posiciona 6 e 8 de forma que não sejam vizinhos
+    indices_disponiveis = list(range(len(tabuleiro_temporario)))
+    random.shuffle(indices_disponiveis)
+
+    fichas_6_8 = [6, 6, 8, 8]
+    for ficha in fichas_6_8:
+        posicao_valida_encontrada = False
+        # Itera sobre uma cópia para poder remover da original
+        for idx in list(indices_disponiveis):
+            peca = tabuleiro_temporario[idx]
+            if peca.get('numero') is not None or peca['cor'] == DESERTO:
+                # Se o índice já foi usado ou é deserto, remove da lista de disponíveis e continua
+                if idx in indices_disponiveis:
+                    indices_disponiveis.remove(idx)
+                continue
+
+            # Verifica se algum vizinho já tem 6 ou 8
+            vizinho_invalido = False
+            for vizinho_idx in peca['vizinhos']:
+                if tabuleiro_temporario[vizinho_idx].get('numero') in [6, 8]:
+                    vizinho_invalido = True
+                    break
             
-            pontos = calcular_pontos_hexagono(cx, cy, TAMANHO_HEX)
-            
-            for px, py in pontos:
-                existe = False
-                for v in vertices_globais:
-                    if math.hypot(px - v.x, py - v.y) < 5:
-                        existe = True
-                        break
-                if not existe:
-                    vertices_globais.append(vertice([px, py]))
-            for vert in vertices_globais:
+            if not vizinho_invalido:
+                peca['numero'] = ficha
+                indices_disponiveis.remove(idx)
+                posicao_valida_encontrada = True
+                break
+        
+        if not posicao_valida_encontrada:
+             # Se não encontrar, pode ser um caso raro. Reinicia a geração.
+             print("Não foi possível posicionar 6/8, tentando novamente...")
+             return gerar_tabuleiro()
+
+    # 4. Preenche o resto com as outras fichas
+    idx_ficha_restante = 0
+    # Itera sobre os índices que sobraram
+    for idx in indices_disponiveis:
+        peca = tabuleiro_temporario[idx]
+        if peca['cor'] != DESERTO:
+            peca['numero'] = fichas_sem_6_8[idx_ficha_restante]
+            idx_ficha_restante += 1
+
+    # --- Montagem final do tabuleiro com coordenadas de vértices ---
+    tabuleiro = []
+    vertices_globais = []
+    
+    for peca_temp in tabuleiro_temporario:
+        cx, cy = peca_temp['centro']
+        pontos = calcular_pontos_hexagono(cx, cy, TAMANHO_HEX)
+        
+        for px, py in pontos:
+            existe = False
+            for v in vertices_globais:
+                if math.hypot(px - v.x, py - v.y) < 5:
+                    existe = True
+                    break
+            if not existe:
+                vertices_globais.append(vertice([px, py]))
+        
+        for vert in vertices_globais:
+            # Recalcula vizinhos dos vértices, se necessário (ou pode ser feito uma vez no final)
+            if not vert.vizinhos: # Apenas se a lista de vizinhos estiver vazia
                 for viz in vertices_globais:
                     if math.dist(vert.pos, viz.pos) <= TAMANHO_HEX * 1.1 and vert != viz:
                         vert.add_vizinho(viz)
-                
-            tabuleiro.append({
-                'centro': (cx, cy),
-                'cor': cor,
-                'numero': numero,
-                'vertices': pontos
-            })
-            idx_terreno += 1
+            
+        tabuleiro.append({
+            'centro': (cx, cy),
+            'cor': peca_temp['cor'],
+            'numero': peca_temp.get('numero'),
+            'vertices': pontos
+        })
             
     return tabuleiro, vertices_globais
 
