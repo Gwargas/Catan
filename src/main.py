@@ -1,6 +1,7 @@
 import pygame
 from menu2 import *
 import gameloop
+from recursos import caminho_asset
 
 
 class Game():
@@ -15,47 +16,53 @@ class Game():
         self.RIGHT_KEY = False
         self.START_KEY = False
         self.BACK_KEY = False
-        self.DISPLAY_W, self.DISPLAY_H = 800, 600
+        self.DISPLAY_W, self.DISPLAY_H = 1200, 700
         self.display = pygame.Surface((self.DISPLAY_W, self.DISPLAY_H))
         self.window = pygame.display.set_mode(((self.DISPLAY_W, self.DISPLAY_H)))
-        self.font_name = pygame.font.get_default_font()
+        self.font_name = "Segoe UI"
         self.BLACK, self.WHITE = (0,0,0), (255,255,255)
+
+        self.game_mode = "custom"
+        self.num_players = 2
+        self.num_humanos = 2
 
         self.music_volume = 0.5
         self.effects_volume = 0.5
 
-        self.cursor_sound = pygame.mixer.Sound("assets/cursor.wav")
-        self.confirm_sound = pygame.mixer.Sound("assets/miado_confirmar.ogg")
-        self.back_sound = pygame.mixer.Sound("assets/miado_voltar.ogg")
+        self.cursor_sound = pygame.mixer.Sound(caminho_asset("cursor.wav"))
+        self.confirm_sound = pygame.mixer.Sound(caminho_asset("miado_confirmar.ogg"))
+        self.back_sound = pygame.mixer.Sound(caminho_asset("miado_voltar.ogg"))
         self.cursor_sound.set_volume(self.effects_volume)
         self.confirm_sound.set_volume(self.effects_volume)
 
-        pygame.mixer.music.load("assets/catanwaltz.wav")
+        pygame.mixer.music.load(caminho_asset("catanwaltz.wav"))
         pygame.mixer.music.set_volume(self.music_volume)
         pygame.mixer.music.play(-1)
 
         self.main_menu = MainMenu(self)
+        self.player_count_menu = PlayerCountMenu(self)
+        self.human_count_menu = HumanCountMenu(self)
+        self.confirmation_menu = ConfirmationMenu(self)
         self.options = OptionsMenu(self)
         self.volume = VolumeMenu(self)
+        self.controls = ControlsMenu(self)
         self.credits = CreditsMenu(self)
         self.curr_menu = self.main_menu
 
     def game_loop(self):
-        while self.playing:
-            self.check_events()
-            if self.START_KEY:
-                self.playing = False
+        if not self.playing:
+            return
 
-            voltar_menu = gameloop.main()
-            self.playing = False
+        gameloop.main(
+            self.game_mode,
+            self.num_players,
+            self.num_humanos,
+            self
+        )
 
-            if not voltar_menu:
-                self.running = False
-            
-            self.window.fill(self.BLACK)
-            self.window.blit(self.display,(0,0))
-            pygame.display.update()
-            self.reset_keys()
+        self.playing = False
+        self.curr_menu = self.main_menu
+        self.reset_keys()
 
     def check_events(self):
         for event in pygame.event.get():
@@ -97,11 +104,15 @@ class Game():
         self.back_sound.set_volume(self.effects_volume)
         self.back_sound.play()
 
-    def draw_text(self, text, size, x, y):
-        font = pygame.font.Font(self.font_name, size)
-        text_surface = font.render(text, True, self.WHITE)
-        text_rect = text_surface.get_rect()
-        text_rect.center = (x,y)
+    def draw_text(self, text, size, x, y, color=None, bold=False):
+        if color is None:
+            color = self.WHITE
+
+        font = pygame.font.SysFont(self.font_name, size)
+        font.set_bold(bold)
+
+        text_surface = font.render(text, True, color)
+        text_rect = text_surface.get_rect(center=(x, y))
         self.display.blit(text_surface, text_rect)
 
 if __name__ == "__main__":
